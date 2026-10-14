@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "out",
+  "framework": null,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo=' 'sha256-jrSRfNw5sc5wvgYA81uk5gL7mhGD3EQEDFG5hqyFVP0=' 'sha256-hU+IDXJ/VXp24zoUyEtne2JkRCOBQ7ldX1MDhqQbbuY=' 'sha256-jTSqadQ/1IW2IykmSxQvUli/Wf9Rw5MAqLiQeT7Sa7g=' 'sha256-trpRP51WVFMQA+nL5ItVtosMMf6q6XS+uUlFxAw3jP4=' 'sha256-qD3y6Bm6EZc07vZGBlPT4IIbNENPGUXY8DpyguuPmM4=' 'sha256-Dbc2EmJSWa6d5h4v+7s9aT5i3E0uzhrNdj7IgRrLr4o='; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "same-origin"
+        }
+      ]
+    }
+  ]
+}

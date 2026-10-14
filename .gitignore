@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+.npm-cache/
+*.tsbuildinfo
+test-results/
+.qa/
+public/cv/opencv.js
+public/cv/worker.js
+public/sw.js
