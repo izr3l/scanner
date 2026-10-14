@@ -248,6 +248,7 @@ input[type="range"] { accent-color:var(--accent); cursor:pointer; }
 .toggle-track::after { content:''; width:8px; height:8px; border-radius:50%; background:var(--text-muted); display:block; transition:transform 180ms var(--ease-out); }
 .toggle-track.on { background:var(--accent); }
 .toggle-track.on::after { background:#063722; transform:translateX(10px); }
+.vault-toast [data-title],.vault-toast [data-description] { color:var(--text) !important; }
 .arrow-forward { transform:rotate(180deg); }
 .capture-flash { position:absolute; inset:0; z-index:5; background:white; opacity:0; pointer-events:none; }
 .capture-flash.visible { opacity:.6; }
