@@ -160,8 +160,9 @@ export function downloadExport(result: ExportResult): void {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  // Browsers dispatch the download asynchronously. Keep the URL alive until navigation consumes it.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Browsers dispatch the download asynchronously and may still resolve the blob after the click returns.
+  // Keep the URL alive long enough to avoid flaky `ERR_FILE_NOT_FOUND` fetches in strict privacy checks.
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export async function shareExport(result: ExportResult): Promise<boolean> {
