@@ -1,4 +1,5 @@
-import type { Point, Quad, ScanMode } from '../types';
+import type { Point, Quad, ScanMode, ScannedPaperSize } from '../types';
+import { PAGE_PRESETS } from '../presets';
 
 export const DETECTION_EDGE = 640;
 export const MAX_IMAGE_PIXELS = 40_000_000;
@@ -77,22 +78,28 @@ export function candidateScore(quad: Quad, frameArea: number, mode: ScanMode): n
   return Math.min(1, 0.50 * Math.sqrt(areaRatio) + 0.20 * rectangularity + 0.20 * aspect + 0.10 * angular / 4);
 }
 
-export function warpGeometry(input: Quad, mode: ScanMode, sourceWidth: number, sourceHeight: number): { corners: Quad; width: number; height: number } {
+export function warpGeometry(input: Quad, mode: ScanMode, sourceWidth: number, sourceHeight: number, paperSize: ScannedPaperSize = 'original'): { corners: Quad; width: number; height: number } {
   if (input.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y))) throw new Error('Crop corners must be finite.');
   let corners = input.map(p => ({ x: Math.max(0, Math.min(sourceWidth - 1, p.x)), y: Math.max(0, Math.min(sourceHeight - 1, p.y)) })) as Quad;
   if (!isConvexQuad(corners) || polygonArea(corners) < 64) throw new Error('Move the crop corners to make a clear four-sided page.');
   let width = Math.max(distance(corners[0], corners[1]), distance(corners[2], corners[3]));
   let height = Math.max(distance(corners[0], corners[3]), distance(corners[1], corners[2]));
-  const ratio = modeRatio(mode);
-  if (ratio) {
+  const lockedRatio = modeRatio(mode);
+  let ratio = lockedRatio;
+  if (lockedRatio) {
     // A portrait capture of a card is turned onto its physical landscape page.
     if (width < height) {
       corners = [corners[3], corners[0], corners[1], corners[2]];
       [width, height] = [height, width];
     }
-    if (width / height > ratio) width = height * ratio;
-    else height = width / ratio;
   }
+  // A photograph's edge lengths do not determine a tilted sheet's physical aspect.
+  // Only rectify to a paper ratio when the user identifies the scanned paper.
+  if (!lockedRatio && paperSize !== 'original') {
+    const size = PAGE_PRESETS[paperSize];
+    ratio = width > height ? size.height / size.width : size.width / size.height;
+  }
+  if (ratio) { if (width / height > ratio) width = height * ratio; else height = width / ratio; }
   width = Math.max(2, Math.round(width));
   height = Math.max(2, Math.round(height));
   assertDimensions(width, height);

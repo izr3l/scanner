@@ -2,11 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Camera, Check, ImagePlus, LoaderCircle, ScanLine, ShieldCheck, SwitchCamera, Zap, ZapOff } from 'lucide-react';
+import { ArrowLeft, Camera, ImagePlus, LoaderCircle, ScanLine, ShieldCheck, SwitchCamera, Zap, ZapOff } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { SecureBadge } from '@/components/app-shell';
 import { QuadOverlay } from '@/components/camera/quad-overlay';
+import { PlacementGuide } from '@/components/camera/placement-guide';
+import { CaptureTray } from '@/components/camera/capture-tray';
+import { CAPTURE_GUIDES } from '@/lib/camera-guide';
 import { useObjectUrl } from '@/components/editor/use-object-url';
 import { useImport } from '@/components/use-import';
 import { useSession } from '@/stores/session';
@@ -16,6 +19,7 @@ const modes: ScanMode[] = ['document', 'id', 'passport', 'book', 'batch'];
 export default function ScanPage() {
   const router = useRouter();
   const video = useRef<HTMLVideoElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const captureInput = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -37,14 +41,12 @@ export default function ScanPage() {
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [stacking, setStacking] = useState(false);
   const snapshotUrl = useObjectUrl(capturedBlob);
-  const lastOriginal = useSession((s) => s.pages.at(-1)?.original ?? null);
-  const thumbUrl = useObjectUrl(lastOriginal);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torch, setTorch] = useState(false);
   const [facing, setFacing] = useState<'environment'|'user'>('environment');
   const autoCapture = useSettings((s) => s.autoCapture);
   const setAutoCapture = useSettings((s) => s.setAutoCapture);
-  const pageCount = useSession((s) => s.pages.length);
+  const idCount = useSession((s) => s.pages.filter((page) => page.type === 'id').length);
   const { importing, importFiles } = useImport();
   const stopCamera = useCallback(() => { cameraGeneration.current++; streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (video.current) video.current.srcObject = null; }, []);
   const startCamera = useCallback(async () => {
@@ -67,7 +69,7 @@ export default function ScanPage() {
   useEffect(() => { modeRef.current = mode; previous.current = null; stableSince.current = 0; setProgress(0); setDetection(null); }, [mode]);
   useEffect(() => { const lifecycle = sessionGeneration; let active = true; void startCamera(); void import('@/lib/cv/client').then(({ warmCV }) => warmCV()).then(() => { if (active) setEngineReady(true); }).catch((error) => { if (active) setEngineError(error instanceof Error ? error.message : 'The offline scanner could not start.'); }); const onVisibility = () => { if (document.hidden) { stopCamera(); setCameraState('paused'); } }; document.addEventListener('visibilitychange', onVisibility); return () => { active = false; lifecycle.current++; stopCamera(); document.removeEventListener('visibilitychange', onVisibility); }; }, [startCamera, stopCamera]);
   const capture = useCallback(async () => {
-    if (capturing.current || !video.current?.videoWidth || cameraState !== 'ready') return;
+    if (capturing.current || importing || !video.current?.videoWidth || cameraState !== 'ready') return;
     capturing.current = true; setBusy(true); setProgress(0); stableSince.current = 0;
     const generation = sessionGeneration.current;
     const epoch = useSession.getState().epoch;
@@ -84,7 +86,7 @@ export default function ScanPage() {
       const scan = { id: crypto.randomUUID(), type: captureMode, createdAt: Date.now(), original: blob, width: result.width, height: result.height, corners: result.corners, recipe: { ...DEFAULT_RECIPE }, redactions: [] };
       useSession.getState().addPages([scan]); setFlash(true); window.setTimeout(() => setFlash(false), 70); navigator.vibrate?.(20);
       if (result.quality.blur || result.quality.glare || result.quality.lowLight) toast('Page captured', { description: result.quality.blur ? 'Some blur detected. You can adjust the scan or retake it.' : result.quality.glare ? 'Some glare detected. Check the preview before export.' : 'This shot is a little dark. Try Auto enhancement.' });
-      if (captureMode === 'book' || captureMode === 'batch' || captureMode === 'id' && useSession.getState().pages.filter((p) => p.type === 'id').length % 2 === 1) { setStacking(true); window.setTimeout(() => { setCapturedBlob(null); setStacking(false); }, 350); toast.success(captureMode === 'id' ? 'Front captured. Flip the card for the back.' : `Page ${useSession.getState().pages.length} captured`); stableSince.current = performance.now() + 1200; previous.current = null; }
+      if (captureMode === 'book' || captureMode === 'batch' || captureMode === 'id' && useSession.getState().pages.filter((p) => p.type === 'id').length % 2 === 1) { setStacking(true); window.setTimeout(() => { setCapturedBlob(null); setStacking(false); }, 350); toast.success(captureMode === 'id' ? 'Front captured. Flip the card for the back.' : `Page ${useSession.getState().pages.length} captured`, { description: 'Review your pages below, or keep scanning.' }); stableSince.current = performance.now() + 1200; previous.current = null; }
       else {
         const transitionDocument = document as Document & { startViewTransition?: (callback: () => Promise<void>) => unknown };
         if (transitionDocument.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -93,19 +95,20 @@ export default function ScanPage() {
       }
     } catch (error) { setCapturedBlob(null); if (generation === sessionGeneration.current) toast.error(error instanceof Error ? error.message : 'Capture failed. Please try again.'); }
     finally { canvas.width = 0; canvas.height = 0; setBusy(false); capturing.current = false; }
-  }, [cameraState, router]);
+  }, [cameraState, importing, router]);
   useEffect(() => {
-    if (cameraState !== 'ready' || !engineReady) return;
+    if (cameraState !== 'ready' || !engineReady || importing) return;
     let cancelled = false, working = false;
     const timer = window.setInterval(async () => {
       const source = video.current;
       if (cancelled || working || capturing.current || document.hidden || !source || source.readyState < 2) return;
       working = true;
+      const frameMode = modeRef.current;
       try {
         const ratio = Math.min(1, 640 / Math.max(source.videoWidth, source.videoHeight));
         const bitmap = await createImageBitmap(source, { resizeWidth: Math.round(source.videoWidth * ratio), resizeHeight: Math.round(source.videoHeight * ratio) });
-        const { detectFrame } = await import('@/lib/cv/client'); const result = await detectFrame(bitmap, modeRef.current);
-        if (cancelled) return;
+        const { detectFrame } = await import('@/lib/cv/client'); const result = await detectFrame(bitmap, frameMode);
+        if (cancelled || frameMode !== modeRef.current) return;
         setDetection(result);
         const now = performance.now();
         const qualityOkay = !result.quality.blur && !result.quality.glare && !result.quality.lowLight;
@@ -117,16 +120,61 @@ export default function ScanPage() {
       finally { working = false; }
     }, 100);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [cameraState, engineReady, autoCapture, capture]);
+  }, [cameraState, engineReady, importing, autoCapture, capture]);
   async function toggleTorch() { const track = streamRef.current?.getVideoTracks()[0]; if (!track) return; try { await track.applyConstraints({ advanced: [{ torch: !torch } as MediaTrackConstraintSet] }); setTorch(!torch); } catch { setTorchAvailable(false); toast('Torch is not available on this camera.'); } }
-  let hint = 'Place your document inside the frame';
+  let hint = CAPTURE_GUIDES[mode].instruction;
   if (!engineReady) hint = engineError || 'Preparing the offline scanner…';
   else if (detection?.quality.lowLight) hint = 'Move into a little more light';
   else if (detection?.quality.glare) hint = 'Tilt slightly to reduce glare';
   else if (detection?.quality.blur) hint = 'Hold steady for a clearer scan';
   else if (progress > 0) hint = 'Hold still. Capturing…';
   else if (detection && !detection.fallback) hint = 'Edges found. Hold steady';
-  if (mode === 'id' && pageCount % 2 === 1) hint = 'Flip your card and capture the back';
-  return <div className="camera-screen"><header className="camera-header"><Link href="/" className="camera-back" aria-label="Back to workspace"><ArrowLeft size={20} /></Link><Link href="/" className="camera-brand"><ScanLine size={21} /><span>vaultscan.</span></Link><SecureBadge /></header><main id="main-content" className="camera-main"><div className="camera-view"><video ref={video} autoPlay muted playsInline aria-label="Live camera view" />{snapshotUrl && <img className={`camera-snapshot ${stacking ? "is-stacking" : ""}`} src={snapshotUrl} alt="Captured document" />}<div className={`camera-guide guide-${mode}`} aria-hidden="true"><i /><i /><i /><i /></div>{detection && !detection.fallback && cameraState === 'ready' && <QuadOverlay detection={detection} />}<div className={`capture-flash ${flash ? 'visible' : ''}`} />{cameraState !== 'ready' && <div className="camera-empty">{cameraState === 'starting' ? <><LoaderCircle size={36} className="spin" /><h1>Opening your camera</h1><p>Your camera feed stays on this device.</p></> : <><span className="camera-empty-icon"><Camera size={36} strokeWidth={1.4} /></span><h1>{cameraState === 'paused' ? 'Camera paused' : cameraState === 'denied' ? 'Your camera, your choice.' : 'Ready for your next scan.'}</h1><p>{cameraState === 'paused' ? 'The camera stops when you leave the app. Resume when you are ready.' : cameraError}</p><div className="camera-fallback-actions"><Button onClick={() => cameraState === 'paused' || cameraState === 'denied' ? void startCamera() : captureInput.current?.click()}><Camera size={17} />{cameraState === 'paused' ? 'Resume camera' : cameraState === 'denied' ? 'Try camera again' : 'Take a photo'}</Button><Button variant="secondary" onClick={() => fileInput.current?.click()}><ImagePlus size={17} />Import images</Button></div></>}</div>}<div className="camera-stage-label"><span className="camera-live-dot" />{cameraState === 'ready' ? 'LIVE VIEW' : 'ON-DEVICE CAMERA'}<span>{mode === 'id' ? '85.6 × 53.98 mm' : mode === 'passport' ? '125 × 88 mm' : 'AUTO EDGE DETECTION'}</span></div></div>
-    <div className="camera-bottom"><p className="capture-hint" role="status">{cameraState === 'ready' ? hint : 'No uploads. Your photos stay yours.'}</p><div className="mode-pills" aria-label="Capture mode">{modes.map((item) => <button key={item} disabled={busy} aria-pressed={mode === item} onClick={() => setMode(item)}>{MODE_LABELS[item]}</button>)}</div><div className="camera-controls"><button className="camera-control gallery-control" aria-label="Import from gallery" disabled={importing || busy} onClick={() => fileInput.current?.click()}>{thumbUrl ? <img className="gallery-thumbnail" src={thumbUrl} alt="Last captured page" /> : <ImagePlus size={23} />}<span>Gallery</span></button><button className="shutter" aria-label="Capture document" disabled={busy || !engineReady || cameraState !== 'ready'} onClick={() => void capture()}><svg viewBox="0 0 90 90" aria-hidden="true"><circle className="shutter-ring" cx="45" cy="45" r="41" /><circle className="shutter-progress" cx="45" cy="45" r="41" strokeDasharray="257.6" strokeDashoffset={257.6 * (1 - progress)} /></svg><span>{busy ? <LoaderCircle className="spin" size={25} /> : <ScanLine size={26} />}</span></button><div className="camera-right-controls">{torchAvailable ? <button className="camera-control" aria-label={torch ? 'Turn torch off' : 'Turn torch on'} aria-pressed={torch} onClick={() => void toggleTorch()}>{torch ? <Zap size={22} /> : <ZapOff size={22} />}<span>Torch</span></button> : <button className="camera-control" aria-label="Switch camera" onClick={() => setFacing(facing === 'environment' ? 'user' : 'environment')}><SwitchCamera size={22} /><span>Switch</span></button>}</div></div><div className="camera-meta"><button className="auto-toggle" aria-pressed={autoCapture} onClick={() => setAutoCapture(!autoCapture)}><span className={`toggle-track ${autoCapture ? 'on' : ''}`} />Auto-capture</button>{pageCount > 0 ? <Button variant="secondary" size="sm" onClick={() => router.push('/edit/')}><Check size={14} />Review {pageCount} {pageCount === 1 ? 'page' : 'pages'}<ArrowLeft className="arrow-forward" size={14} /></Button> : <span><ShieldCheck size={13} />Private by design</span>}</div></div></main><input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Choose images" /><input ref={captureInput} className="sr-only" type="file" accept="image/*" capture="environment" onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Take a photo with your camera app" /></div>;
+  if (mode === 'id' && idCount % 2 === 1 && engineReady) hint = 'Front captured. Flip your card and fit the back inside the outline';
+  return <div className="camera-screen">
+    <header className="camera-header">
+      <Link href="/" className="camera-back" aria-label="Back to workspace"><ArrowLeft size={20} /></Link>
+      <Link href="/" className="camera-brand"><ScanLine size={21} /><span>vaultscan.</span></Link>
+      <SecureBadge />
+    </header>
+    <main id="main-content" className="camera-main">
+      <div ref={stage} className="camera-view">
+        <video ref={video} autoPlay muted playsInline aria-label="Live camera view" />
+        {snapshotUrl && <img className={`camera-snapshot ${stacking ? 'is-stacking' : ''}`} src={snapshotUrl} alt="Captured document" />}
+        {cameraState === 'ready' && <PlacementGuide stage={stage} video={video} mode={mode} backOfCard={idCount % 2 === 1} />}
+        {detection && !detection.fallback && cameraState === 'ready' && <QuadOverlay detection={detection} />}
+        <div className={`capture-flash ${flash ? 'visible' : ''}`} />
+        {cameraState !== 'ready' && <div className="camera-empty">
+          {cameraState === 'starting' ? <><LoaderCircle size={36} className="spin" /><h1>Opening your camera</h1><p>Your camera feed stays on this device.</p></> : <>
+            <span className="camera-empty-icon"><Camera size={36} strokeWidth={1.4} /></span>
+            <h1>{cameraState === 'paused' ? 'Camera paused' : cameraState === 'denied' ? 'Your camera, your choice.' : 'Ready for your next scan.'}</h1>
+            <p>{cameraState === 'paused' ? 'The camera stops when you leave the app. Resume when you are ready.' : cameraError}</p>
+            <div className="camera-fallback-actions">
+              <Button onClick={() => cameraState === 'paused' || cameraState === 'denied' ? void startCamera() : captureInput.current?.click()}><Camera size={17} />{cameraState === 'paused' ? 'Resume camera' : cameraState === 'denied' ? 'Try camera again' : 'Take a photo'}</Button>
+              <Button variant="secondary" onClick={() => fileInput.current?.click()}><ImagePlus size={17} />Import images</Button>
+            </div>
+          </>}
+        </div>}
+        <div className="camera-stage-label"><span className="camera-live-dot" />{cameraState === 'ready' ? 'LIVE VIEW' : 'ON-DEVICE CAMERA'}<span>AUTO EDGE DETECTION</span></div>
+      </div>
+      <div className="camera-bottom">
+        <CaptureTray disabled={busy || importing} />
+        <p className="capture-hint" role="status">{cameraState === 'ready' ? hint : 'No uploads. Your photos stay yours.'}</p>
+        <div className="mode-pills" aria-label="Capture mode">{modes.map((item) => <button key={item} disabled={busy || importing} aria-pressed={mode === item} onClick={() => setMode(item)}>{MODE_LABELS[item]}</button>)}</div>
+        <div className="camera-controls">
+          <button className="camera-control gallery-control" aria-label="Import images from device" disabled={importing || busy} onClick={() => fileInput.current?.click()}><ImagePlus size={23} /><span>Import</span></button>
+          <button className="shutter" aria-label="Capture document" disabled={busy || importing || !engineReady || cameraState !== 'ready'} onClick={() => void capture()}>
+            <svg viewBox="0 0 90 90" aria-hidden="true"><circle className="shutter-ring" cx="45" cy="45" r="41" /><circle className="shutter-progress" cx="45" cy="45" r="41" strokeDasharray="257.6" strokeDashoffset={257.6 * (1 - progress)} /></svg>
+            <span>{busy ? <LoaderCircle className="spin" size={25} /> : <ScanLine size={26} />}</span>
+          </button>
+          <div className="camera-right-controls">{torchAvailable ? <button className="camera-control" disabled={busy || importing} aria-label={torch ? 'Turn torch off' : 'Turn torch on'} aria-pressed={torch} onClick={() => void toggleTorch()}>{torch ? <Zap size={22} /> : <ZapOff size={22} />}<span>Torch</span></button> : <button className="camera-control" disabled={busy || importing} aria-label="Switch camera" onClick={() => setFacing(facing === 'environment' ? 'user' : 'environment')}><SwitchCamera size={22} /><span>Switch</span></button>}</div>
+        </div>
+        <div className="camera-meta">
+          <button className="auto-toggle" aria-pressed={autoCapture} onClick={() => setAutoCapture(!autoCapture)}><span className={`toggle-track ${autoCapture ? 'on' : ''}`} />Auto-capture</button>
+          <span><ShieldCheck size={13} />Private by design</span>
+        </div>
+      </div>
+    </main>
+    <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Choose images" />
+    <input ref={captureInput} className="sr-only" type="file" accept="image/*" capture="environment" onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Take a photo with your camera app" />
+  </div>;
 }

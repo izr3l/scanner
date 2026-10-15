@@ -23,9 +23,9 @@ export function FlattenPreview({ page, blob, onComplete, onSize }: { page: ScanP
   const [decoded, setDecoded] = useState<{ url: string; width: number; height: number } | null>(null);
   const [active, setActive] = useState(false);
   const geometry = useMemo(() => {
-    try { return warpGeometry(page.corners, page.type, page.width, page.height); }
+    try { return warpGeometry(page.corners, page.type, page.width, page.height, page.recipe.paperSize); }
     catch { return null; }
-  }, [page.corners, page.type, page.width, page.height]);
+  }, [page.corners, page.type, page.width, page.height, page.recipe.paperSize]);
 
   useEffect(() => {
     const element = plane.current;

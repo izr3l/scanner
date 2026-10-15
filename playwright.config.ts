@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const previewURL = new URL(baseURL);
+
 export default defineConfig({
   testDir: "./tests/browser",
   timeout: 120_000,
@@ -10,7 +13,7 @@ export default defineConfig({
   outputDir: ".qa/playwright/results",
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: "http://localhost:3000",
+    baseURL,
     channel: process.platform === "win32" ? "msedge" : undefined,
     headless: true,
     viewport: { width: 1440, height: 1000 },
@@ -21,7 +24,8 @@ export default defineConfig({
   },
   webServer: {
     command: "npm run preview",
-    url: "http://localhost:3000",
+    url: baseURL,
+    env: { PORT: previewURL.port || (previewURL.protocol === "https:" ? "443" : "80") },
     reuseExistingServer: true,
     timeout: 90_000,
   },
