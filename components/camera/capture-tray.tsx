@@ -2,14 +2,13 @@
 import { ArrowRight, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { useObjectUrl } from '@/components/editor/use-object-url';
+import { BlobImage } from '@/components/editor/blob-image';
 import { useSession } from '@/stores/session';
 import type { ScanPage } from '@/lib/types';
 
 function CapturedThumbnail({ page, number, onOpen }: { page: ScanPage; number: number; onOpen: () => void }) {
-  const url = useObjectUrl(page.original);
   return <button className="captured-thumbnail" onClick={onOpen} aria-label={`Review captured page ${number}`}>
-    {url && <img src={url} alt="" />}<span>{number}</span>
+    <BlobImage blob={page.original} alt="" /><span>{number}</span>
   </button>;
 }
 

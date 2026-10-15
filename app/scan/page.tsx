@@ -10,7 +10,7 @@ import { QuadOverlay } from '@/components/camera/quad-overlay';
 import { PlacementGuide } from '@/components/camera/placement-guide';
 import { CaptureTray } from '@/components/camera/capture-tray';
 import { CAPTURE_GUIDES } from '@/lib/camera-guide';
-import { useObjectUrl } from '@/components/editor/use-object-url';
+import { BlobImage } from '@/components/editor/blob-image';
 import { useImport } from '@/components/use-import';
 import { useSession } from '@/stores/session';
 import { useSettings } from '@/stores/settings';
@@ -40,7 +40,6 @@ export default function ScanPage() {
   const [flash, setFlash] = useState(false);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [stacking, setStacking] = useState(false);
-  const snapshotUrl = useObjectUrl(capturedBlob);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torch, setTorch] = useState(false);
   const [facing, setFacing] = useState<'environment'|'user'>('environment');
@@ -139,7 +138,7 @@ export default function ScanPage() {
     <main id="main-content" className="camera-main">
       <div ref={stage} className="camera-view">
         <video ref={video} autoPlay muted playsInline aria-label="Live camera view" />
-        {snapshotUrl && <img className={`camera-snapshot ${stacking ? 'is-stacking' : ''}`} src={snapshotUrl} alt="Captured document" />}
+        <BlobImage blob={capturedBlob} className={`camera-snapshot ${stacking ? 'is-stacking' : ''}`} alt="Captured document" />
         {cameraState === 'ready' && <PlacementGuide stage={stage} video={video} mode={mode} backOfCard={idCount % 2 === 1} />}
         {detection && !detection.fallback && cameraState === 'ready' && <QuadOverlay detection={detection} />}
         <div className={`capture-flash ${flash ? 'visible' : ''}`} />

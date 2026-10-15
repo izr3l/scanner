@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { inflateSync } from "node:zlib";
 import { PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, type PDFPage } from "pdf-lib";
 import type { CV } from "../../lib/cv/runtime";
+import { assertObjectUrlsSafe, monitorObjectUrls } from "./object-url-monitor";
 
 const BASE = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000").origin;
 
@@ -91,7 +92,18 @@ async function importDocument(page: Page) {
 
 async function assertAccessible(page: Page) {
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-  expect(results.violations.map(({ id, nodes }) => ({ id, targets: nodes.map((node) => node.target) }))).toEqual([]);
+  expect(results.violations.map(({ id, impact, help, nodes }) => ({
+    id, impact, help,
+    nodes: nodes.map((node) => ({
+      target: node.target,
+      html: node.html,
+      failureSummary: node.failureSummary,
+      checks: [...node.any, ...node.all, ...node.none].map(({ id, message, data, relatedNodes }) => ({
+        id, message, data,
+        relatedNodes: relatedNodes?.map(({ target, html }) => ({ target, html })),
+      })),
+    })),
+  }))).toEqual([]);
 }
 
 async function capture(page: Page, path: string) {
@@ -134,6 +146,7 @@ async function assertRasterPdf(bytes: Uint8Array, expectedPages: number) {
 }
 
 async function monitorPrivacy(page: Page) {
+  await monitorObjectUrls(page);
   const failures: string[] = [];
   const requests: { url: string; method: string; body: string | null }[] = [];
   page.on("pageerror", (error) => failures.push(error.message));
@@ -147,6 +160,7 @@ async function monitorPrivacy(page: Page) {
   });
   return async () => {
     expect(failures).toEqual([]);
+    await assertObjectUrlsSafe(page);
     expect(requests.filter((request) => new URL(request.url).origin !== BASE)).toEqual([]);
     expect(requests.filter((request) => !["GET", "HEAD"].includes(request.method) || request.body)).toEqual([]);
     expect(requests.filter((request) => request.url.includes("synthetic-document"))).toEqual([]);
@@ -351,6 +365,51 @@ test("fresh mobile workspace and both privacy themes are accessible without a sc
   await assertAccessible(page);
   await capture(page, ".qa/playwright/settings-mobile-light.png");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await assertPrivacy();
+});
+
+test("rapid filters, compare, page thumbnails and navigation keep native image URLs valid", async ({ page }) => {
+  const assertPrivacy = await monitorPrivacy(page);
+  await page.goto("/");
+  await closeIntroduction(page);
+  await importDocument(page);
+  await page.getByRole("button", { name: "Apply crop", exact: true }).click();
+  const enhanced = page.getByAltText("Enhanced document preview", { exact: true });
+  await expect(enhanced).toBeVisible();
+  await page.getByRole("button", { name: "Duplicate selected page", exact: true }).click();
+  const first = page.getByRole("button", { name: "Edit page 1", exact: true });
+  const second = page.getByRole("button", { name: "Edit page 2", exact: true });
+  await expect(second).toHaveAttribute("aria-current", "true");
+  for (const filter of ["Color boost", "B&W", "Grayscale"]) {
+    await expect(enhanced).toBeVisible();
+    const previous = await enhanced.getAttribute("src");
+    await page.getByRole("button", { name: filter, exact: true }).click();
+    await expect.poll(() => enhanced.getAttribute("src")).not.toBe(previous);
+    const compare = page.getByRole("button", { name: "Hold to compare", exact: true });
+    await expect(compare).toBeEnabled();
+    await compare.focus();
+    await page.keyboard.down("Space");
+    await expect(page.getByAltText("Cropped document before enhancement", { exact: true })).toBeVisible();
+    await page.keyboard.up("Space");
+    await first.click();
+    await second.click();
+    await expect.poll(() => enhanced.evaluate((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
+    await assertObjectUrlsSafe(page);
+  }
+  await expect.poll(() => page.locator(".editor-page-select img").evaluateAll((images) => images.length === 2 && images.every((image) => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  // Leave while a new recipe is queued, then return through the real page strip.
+  await page.getByRole("button", { name: "Original", exact: true }).click();
+  await page.getByRole("link", { name: "Export document", exact: true }).click();
+  const arranged = page.getByAltText("First export sheet with the chosen layout, watermark and redactions", { exact: true });
+  await expect.poll(() => arranged.evaluate((image) => (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await page.getByRole("link", { name: "Back to editing", exact: true }).click();
+  await first.click();
+  await second.click();
+  await expect.poll(() => page.getByAltText("Original scan with adjustable crop corners", { exact: true }).evaluate((image) => (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Privacy & settings", exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Object.values(window.testObjectUrls.created).filter((owner) => owner.revokes === 0).length)).toBe(0);
+  await assertObjectUrlsSafe(page, true);
   await assertPrivacy();
 });
 

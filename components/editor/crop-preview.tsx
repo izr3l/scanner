@@ -5,7 +5,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair } from "lucide-rea
 import type { Point, Quad, ScanPage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { ImagePlane } from "./image-plane";
-import { useObjectUrl } from "./use-object-url";
+import { BlobImage } from "./blob-image";
 
 const CORNER_LABELS = ["Top left", "Top right", "Bottom right", "Bottom left"];
 
@@ -18,7 +18,6 @@ function convex(quad: Quad) {
 }
 
 export function CropPreview({ page, onChange }: { page: ScanPage; onChange: (corners: Quad) => void }) {
-  const url = useObjectUrl(page.original);
   const plane = useRef<HTMLDivElement>(null);
   const image = useRef<HTMLImageElement>(null);
   const loupe = useRef<HTMLCanvasElement>(null);
@@ -72,12 +71,12 @@ export function CropPreview({ page, onChange }: { page: ScanPage; onChange: (cor
     draw();
     source.addEventListener("load", draw);
     return () => source.removeEventListener("load", draw);
-  }, [page.corners, page.width, page.height, selected, url]);
+  }, [page.corners, page.width, page.height, page.original, selected]);
 
   return <>
     <ImagePlane width={page.width} height={page.height} className="crop-stage">
       <div className="crop-coordinate-plane" ref={plane}>
-        {url ? <img src={url} ref={image} alt="Original scan with adjustable crop corners" draggable={false} /> : null}
+        <BlobImage blob={page.original} imageRef={image} alt="Original scan with adjustable crop corners" draggable={false} />
         <svg className="crop-overlay" viewBox={`0 0 ${page.width} ${page.height}`} preserveAspectRatio="none" aria-hidden="true">
           <defs><mask id={`crop-mask-${page.id}`}><rect width={page.width} height={page.height} fill="white" /><polygon points={page.corners.map((p) => `${p.x},${p.y}`).join(" ")} fill="black" /></mask></defs>
           <rect width={page.width} height={page.height} fill="rgba(0,0,0,.52)" mask={`url(#crop-mask-${page.id})`} />
