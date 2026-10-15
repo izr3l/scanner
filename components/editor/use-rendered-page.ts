@@ -38,7 +38,7 @@ export function useRenderedPage(page: ScanPage | undefined, enabled = true) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [page?.id, page?.original, page?.width, page?.height, page?.corners, page?.recipe.filter, page?.recipe.brightness, page?.recipe.contrast, page?.recipe.sharpness, page?.recipe.rotation, page?.recipe.flipX, enabled]);
+  }, [page?.id, page?.original, page?.width, page?.height, page?.corners, page?.recipe.filter, page?.recipe.brightness, page?.recipe.contrast, page?.recipe.sharpness, page?.recipe.rotation, page?.recipe.flipX, page?.recipe.paperSize, enabled]);
 
   return { blob: result && result.id === page?.id ? result.blob : null, busy, error };
 }

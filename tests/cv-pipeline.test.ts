@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { patchOpenCV } from '../scripts/opencv-csp.mjs';
 import type { CV } from '../lib/cv/runtime';
 import type { Quad } from '../lib/types';
-import { candidateScore, distance, insetQuad, isConvexQuad, orderQuad, project, warpGeometry } from '../lib/cv/geometry';
+import { candidateScore, distance, insetQuad, isConvexQuad, orderQuad, polygonArea, project, warpGeometry } from '../lib/cv/geometry';
 import { detectPixels } from '../lib/cv/detect';
 import { enhance, estimateLevels } from '../lib/cv/enhance';
 import { assessQuality } from '../lib/cv/quality';
@@ -29,7 +29,86 @@ function imageFromMat(mat: InstanceType<CV['Mat']>): ImageData {
   return { data: new Uint8ClampedArray(mat.data), width: mat.cols, height: mat.rows, colorSpace: 'srgb' } as ImageData;
 }
 
+function photographedPaper(options: { contrast: number; shadow?: boolean; blur?: boolean }) {
+  const width = 640, height = 480;
+  const expected: Quad = [{ x: 185, y: 28 }, { x: 507, y: 65 }, { x: 465, y: 454 }, { x: 151, y: 421 }];
+  const mask = cv.Mat.zeros(height, width, cv.CV_8UC1);
+  const polygon = cv.matFromArray(4, 1, cv.CV_32SC2, expected.flatMap(p => [p.x, p.y]));
+  const source = new cv.Mat(height, width, cv.CV_8UC4);
+  try {
+    cv.fillConvexPoly(mask, polygon, new cv.Scalar(255));
+    const pixels = source.data, paper = mask.data;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const shadow = options.shadow ? 65 * Math.exp(-(((x - 145 - y * 0.3) / 95) ** 2)) : 0;
+      const noise = ((x * 17 + y * 29) % 7) - 3;
+      const value = 212 + (paper[y * width + x] ? options.contrast : 0) + x * 0.014 - shadow + noise;
+      const offset = (y * width + x) * 4;
+      pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = Math.round(value);
+      pixels[offset + 3] = 255;
+    }
+    // A strong inset chart is deliberately easier to see than the page boundary.
+    cv.rectangle(source, new cv.Point(220, 140), new cv.Point(416, 337), new cv.Scalar(45, 45, 45, 255), 4);
+    for (let y = 160; y < 320; y += 27) cv.line(source, new cv.Point(235, y), new cv.Point(395, y), new cv.Scalar(80, 80, 80, 255), 2);
+    if (options.blur) cv.GaussianBlur(source, source, new cv.Size(7, 7), 1.2);
+    return { source, expected };
+  } catch (error) { source.delete(); throw error; }
+  finally { polygon.delete(); mask.delete(); }
+}
+
 describe('real OpenCV scanner pipeline', () => {
+  it.each([
+    { name: 'white paper on a pale surface', contrast: 13 },
+    { name: 'soft camera focus and low contrast', contrast: 19, blur: true },
+    { name: 'a broad diagonal shadow and sensor noise', contrast: 19, shadow: true, blur: true },
+  ])('finds the whole page around an inner chart with $name', (options) => {
+    const { source, expected } = photographedPaper(options);
+    try {
+      const result = detectPixels(cv, imageFromMat(source), 'document');
+      expect(result.fallback).toBe(false);
+      expect(polygonArea(result.corners)).toBeGreaterThan(polygonArea(expected) * 0.90);
+      result.corners.forEach((corner, index) => expect(distance(corner, expected[index])).toBeLessThan(10));
+    } finally { source.delete(); }
+  });
+
+  it('keeps the outer page when an inset filled chart is also a supported quadrilateral', () => {
+    const { source, expected } = photographedPaper({ contrast: 17, shadow: true });
+    try {
+      cv.rectangle(source, new cv.Point(220, 140), new cv.Point(416, 337), new cv.Scalar(45, 45, 45, 255), -1);
+      const result = detectPixels(cv, imageFromMat(source), 'document');
+      expect(result.fallback).toBe(false);
+      result.corners.forEach((corner, index) => expect(distance(corner, expected[index])).toBeLessThan(10));
+    } finally { source.delete(); }
+  });
+
+  it('does not treat a printed chart outline as a visible paper boundary', () => {
+    const source = new cv.Mat(480, 640, cv.CV_8UC4, new cv.Scalar(238, 238, 238, 255));
+    try {
+      cv.rectangle(source, new cv.Point(150, 90), new cv.Point(490, 390), new cv.Scalar(45, 45, 45, 255), 4);
+      const result = detectPixels(cv, imageFromMat(source), 'document');
+      expect(result.fallback).toBe(true);
+      expect(result.confidence).toBe(0);
+    } finally { source.delete(); }
+  });
+
+  it('ignores an image-frame border around a real page', () => {
+    const { source, expected } = photographedPaper({ contrast: 25 });
+    try {
+      cv.rectangle(source, new cv.Point(0, 0), new cv.Point(639, 479), new cv.Scalar(30, 30, 30, 255), 4);
+      const result = detectPixels(cv, imageFromMat(source), 'document');
+      expect(result.fallback).toBe(false);
+      result.corners.forEach((corner, index) => expect(distance(corner, expected[index])).toBeLessThan(10));
+    } finally { source.delete(); }
+  });
+
+  it('does not manufacture a fourth paper corner from a triangular object', () => {
+    const source = new cv.Mat(480, 640, cv.CV_8UC4, new cv.Scalar(60, 60, 60, 255));
+    const triangle = cv.matFromArray(3, 1, cv.CV_32SC2, [190, 50, 530, 420, 100, 405]);
+    try {
+      cv.fillConvexPoly(source, triangle, new cv.Scalar(235, 235, 235, 255));
+      expect(detectPixels(cv, imageFromMat(source), 'document').fallback).toBe(true);
+    } finally { triangle.delete(); source.delete(); }
+  });
+
   it('detects a perspective document rather than choosing its text lines', () => {
     const source = new cv.Mat(480, 640, cv.CV_8UC4, new cv.Scalar(25, 25, 25, 255));
     const expected: Quad = [{ x: 120, y: 65 }, { x: 540, y: 100 }, { x: 505, y: 415 }, { x: 100, y: 390 }];

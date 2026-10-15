@@ -1,5 +1,5 @@
-import type { ArrangeOptions } from '@/lib/types';
-export { DEFAULT_ARRANGEMENT } from '@/lib/types';
+import type { ArrangeOptions } from './types';
+export { DEFAULT_ARRANGEMENT } from './types';
 
 export const MM_PER_INCH = 25.4;
 export const POINTS_PER_INCH = 72;

@@ -44,7 +44,7 @@ export async function render(cv: CV, page: ScanPage): Promise<Blob> {
   try {
     bitmap = await createImageBitmap(page.original);
     assertDimensions(bitmap.width, bitmap.height);
-    const geometry = warpGeometry(page.corners, page.type, bitmap.width, bitmap.height);
+    const geometry = warpGeometry(page.corners, page.type, bitmap.width, bitmap.height, page.recipe.paperSize);
     const { corners, width, height } = geometry;
     sourceCanvas = new OffscreenCanvas(bitmap.width, bitmap.height);
     const sourceContext = sourceCanvas.getContext('2d', { willReadFrequently: true });

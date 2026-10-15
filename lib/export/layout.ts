@@ -1,15 +1,15 @@
-import type { ArrangeOptions, ScanPage } from '@/lib/types';
-import { ID_CARD_MM, PASSPORT_MM, pageSizeMM, pixelsToMM } from '@/lib/presets';
+import type { ArrangeOptions, ScanPage, ScannedPaperSize } from '@/lib/types';
+import { ID_CARD_MM, PASSPORT_MM, PAGE_PRESETS, pageSizeMM, pixelsToMM } from '@/lib/presets';
 import { warpGeometry } from '@/lib/cv/geometry';
 
 export type Rect = { x: number; y: number; width: number; height: number };
-export type PageSource = Pick<ScanPage, 'type'> & { width: number; height: number };
+export type PageSource = Pick<ScanPage, 'type'> & { width: number; height: number; paperSize?: ScannedPaperSize };
 export type Placement = { sourceIndex: number; rect: Rect; clip: Rect; cropMarks: boolean };
 export type SheetLayout = { width: number; height: number; placements: Placement[] };
 
 /** Recommend from the actual flattened/rotated output, rather than the source camera frame. */
-export function recommendedOrientation(page: Pick<ScanPage, 'corners' | 'type' | 'width' | 'height' | 'recipe'>): ArrangeOptions['orientation'] {
-  const { width, height } = warpGeometry(page.corners, page.type, page.width, page.height);
+export function recommendedOrientation(page: Pick<ScanPage, 'corners' | 'type' | 'width' | 'height' | 'recipe'>): Exclude<ArrangeOptions['orientation'], 'auto'> {
+  const { width, height } = warpGeometry(page.corners, page.type, page.width, page.height, page.recipe.paperSize);
   const rotation = Number.isFinite(page.recipe.rotation) ? ((page.recipe.rotation % 360) + 360) % 360 : 0;
   const radians = rotation * Math.PI / 180;
   const absCos = Math.abs(Math.cos(radians));
@@ -32,9 +32,10 @@ export function fitRect(source: { width: number; height: number }, target: Rect,
 }
 
 function physicalSize(source: PageSource, dpi: number) {
-  const size = source.type === 'id' ? ID_CARD_MM : source.type === 'passport' ? PASSPORT_MM : null;
+  const size = source.type === 'id' ? ID_CARD_MM : source.type === 'passport' ? PASSPORT_MM : source.paperSize && source.paperSize !== 'original' ? PAGE_PRESETS[source.paperSize] : null;
   if (!size) return { width: pixelsToMM(source.width, dpi), height: pixelsToMM(source.height, dpi) };
-  return source.width >= source.height ? size : { width: size.height, height: size.width };
+  const shorter = Math.min(size.width, size.height), longer = Math.max(size.width, size.height);
+  return source.width >= source.height ? { width: longer, height: shorter } : { width: shorter, height: longer };
 }
 
 /** All sheet and placement dimensions are millimetres, independent of raster DPI. */
@@ -72,8 +73,10 @@ export function arrangePages(sources: PageSource[], options: ArrangeOptions, dpi
     }
     return layouts;
   }
-  return sources.map((source, sourceIndex) => ({
-    ...size,
-    placements: [{ sourceIndex, rect: fitRect(source, clip, options.fit, physicalSize(source, dpi)), clip, cropMarks: options.cropMarks }],
-  }));
+  return sources.map((source, sourceIndex) => {
+    const sheet = pageSizeMM({ ...options, orientation: options.orientation === 'auto' ? source.width > source.height ? 'landscape' : 'portrait' : options.orientation });
+    const inset = Math.max(0, Math.min(Number.isFinite(options.margin) ? options.margin : 0, (Math.min(sheet.width, sheet.height) - 1) / 2));
+    const bounds = { x: inset, y: inset, width: sheet.width - inset * 2, height: sheet.height - inset * 2 };
+    return { ...sheet, placements: [{ sourceIndex, rect: fitRect(source, bounds, options.fit, physicalSize(source, dpi)), clip: bounds, cropMarks: options.cropMarks }] };
+  });
 }

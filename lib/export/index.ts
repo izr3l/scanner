@@ -6,25 +6,14 @@ import type { PdfSheet } from './pdf';
 import { burnRedactions } from './redact';
 import { canvasBlob, canvasContext, loadPixels, makeCanvas, releaseCanvas } from './strip';
 import { drawWatermark } from './watermark';
+import { exportFilename } from './filename';
 
 export type { ExportResult } from '@/lib/types';
+export { exportFilename } from './filename';
 
 function ensurePages(pages: ScanPage[]) {
   if (!pages.length) throw new Error('Add at least one scan before exporting.');
   if (pages.length > 50) throw new Error('Export up to 50 pages at a time.');
-}
-
-function dateLabel(timestamp: number): string {
-  const date = new Date(timestamp);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-export function exportFilename(pages: ScanPage[], options: ExportOptions, pageNumber?: number): string {
-  const template = options.filename.trim() || '{type}-{date}';
-  let name = template.replaceAll('{type}', pages[0]?.type || 'document').replaceAll('{date}', dateLabel(pages[0]?.createdAt ?? Date.now()));
-  name = name.replace(/\.(?:pdf|png|jpe?g|webp)$/i, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/^\.+|\.+$/g, '').slice(0, 100).trim() || 'scan';
-  const extension = options.format === 'jpeg' ? 'jpg' : options.format;
-  return `${name}${pageNumber === undefined ? '' : `-${String(pageNumber).padStart(2, '0')}`}.${extension}`;
 }
 
 function drawCropMarks(context: CanvasRenderingContext2D, placement: Placement, scaleX: number, scaleY: number) {
@@ -68,7 +57,7 @@ async function renderSheet(pages: ScanPage[], options: ExportOptions, preview: b
         pixels.release();
       }
     }
-    const sources = images.map((image, index) => ({ type: pages[index].type, width: image.width, height: image.height }));
+    const sources = images.map((image, index) => ({ type: pages[index].type, width: image.width, height: image.height, paperSize: pages[index].recipe.paperSize }));
     const layout = arrangePages(sources, options.arrangement, options.dpi)[0];
     const width = mmToPixels(layout.width, options.dpi);
     const height = mmToPixels(layout.height, options.dpi);

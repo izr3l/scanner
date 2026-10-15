@@ -7,8 +7,7 @@ import { ArrowRight, Check, ChevronDown, Crop, Eye, FileCheck2, LoaderCircle, Sc
 import { toast } from "@/lib/toast";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { MODE_LABELS, type ExportOptions, type ScanPage } from "@/lib/types";
-import { recommendedOrientation } from "@/lib/export/layout";
+import { MODE_LABELS, type ExportOptions, type ScanPage, type ScannedPaperSize } from "@/lib/types";
 import { useSession } from "@/stores/session";
 import { useSettings } from "@/stores/settings";
 import { ArrangeControls } from "./arrange-controls";
@@ -83,13 +82,11 @@ export function Editor() {
   }
 
   function autoOrient() {
-    if (!page) return;
-    try { setArrangement({ orientation: recommendedOrientation(page) }); }
-    catch (reason) { toast.error(reason instanceof Error ? reason.message : "Adjust the crop corners before choosing orientation."); }
+    setArrangement({ orientation: 'auto' });
   }
 
   const tools = page ? <>
-    {tab === "crop" ? <div className="editor-controls"><div className="editor-control-heading"><span>Find the perfect edges</span><Crop size={17} /></div><p className="editor-instruction">Drag the four corners to the edges of your document. Use the magnifier for a precise finish.</p><Button variant="secondary" onClick={() => void autoDetect()} disabled={detecting}>{detecting ? <LoaderCircle className="editor-spinner" size={18} /> : <ScanLine size={18} />}{detecting ? "Finding edges…" : "Auto detect edges"}</Button><div className="editor-privacy-card"><Check size={20} /><div><strong>Full resolution, every time</strong><p>Flattening uses your original image so small details stay sharp.</p></div></div><Button onClick={() => { setFlattening(page); setTab("enhance"); }} className="editor-full-width">Apply crop <ArrowRight size={16} /></Button></div> : null}
+    {tab === "crop" ? <div className="editor-controls"><div className="editor-control-heading"><span>Find the perfect edges</span><Crop size={17} /></div><p className="editor-instruction">Drag the four corners to the edges of your document. Use the magnifier for a precise finish.</p><Button variant="secondary" onClick={() => void autoDetect()} disabled={detecting}>{detecting ? <LoaderCircle className="editor-spinner" size={18} /> : <ScanLine size={18} />}{detecting ? "Finding edges…" : "Auto detect edges"}</Button>{page.type !== 'id' && page.type !== 'passport' ? <label className="editor-field">Scanned paper size<select aria-label="Scanned paper size" value={page.recipe.paperSize ?? 'original'} onChange={(event) => updateRecipe(page.id, { paperSize: event.target.value as ScannedPaperSize })}><option value="original">Original proportions</option><option value="a4">A4 · 210 × 297 mm</option><option value="letter">US Letter · 216 × 279 mm</option><option value="a5">A5 · 148 × 210 mm</option></select><small>Choose the paper you scanned to restore its proportions after an angled photo. Use Original for receipts and other shapes.</small></label> : <p className="editor-footnote">{page.type === 'id' ? 'ID card' : 'Passport'} proportions are fixed to the document’s physical size.</p>}<div className="editor-privacy-card"><Check size={20} /><div><strong>Full resolution, every time</strong><p>Flattening uses your original image so small details stay sharp.</p></div></div><Button onClick={() => { setFlattening(page); setTab("enhance"); }} className="editor-full-width">Apply crop <ArrowRight size={16} /></Button></div> : null}
     {tab === "enhance" ? <EnhanceControls page={page} onChange={(patch) => updateRecipe(page.id, patch)} /> : null}
     {tab === "arrange" ? <ArrangeControls options={arrangement} onChange={setArrangement} idCopyAvailable={idCopyAvailable} onAutoOrient={autoOrient} /> : null}
     {tab === "protect" ? <ProtectControls watermark={watermark} onWatermark={setWatermark} redactions={page.redactions} onRedactions={(value) => updatePage(page.id, { redactions: value })} drawing={drawing} onDrawing={(value) => { setDrawing(value); if (value) setDrawerOpen(false); }} /> : null}
