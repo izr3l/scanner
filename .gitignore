@@ -8,3 +8,5 @@ test-results/
 public/cv/opencv.js
 public/cv/worker.js
 public/sw.js
+public/pdf/
+public/ocr/

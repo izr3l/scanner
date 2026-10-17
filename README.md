@@ -1,12 +1,12 @@
 # Vaultscan
 
-A document-scanning PWA. Capture or import a photo, adjust its corners, flatten and enhance it, arrange pages, and export PDF, PNG, JPEG, or WebP. Processing happens on the device, with no accounts, scan uploads, analytics, or remote fonts.
+A document-scanning PWA. Capture a photo or import images and scanned PDFs, flatten and enhance pages, and export PDF, PNG, JPEG, or WebP. On-device English and French OCR can produce a searchable PDF or rebuild reviewed text in a clear digital font. There are no accounts, scan uploads, analytics, or remote fonts.
 
 ## Scope
 
 There is no saved library, IndexedDB, scan encryption at rest, passcode, lock/unlock, or Vault. Reloading or closing the app discards the session. Export files you want to keep before leaving. Downloads, clipboard contents, and files shared with another app are outside the temporary workspace.
 
-Only public app assets are cached for offline use. The service worker never caches scans. OCR, passport MRZ reading, and searchable PDFs remain v2. Password-protected PDFs are deferred until a vetted encryption library is selected.
+Only public app assets, including the PDF renderer and OCR language models, are cached for offline use. The service worker never caches scans or recognized text; OCR does not use an IndexedDB model cache. Passport MRZ reading and password-protected PDF export remain deferred. Password-protected PDF imports are rejected.
 
 ## Run locally
 
@@ -17,7 +17,7 @@ npm ci --ignore-scripts
 npm run dev
 ```
 
-Open `http://localhost:3000`. Both `dev` and `build` explicitly prepare local fonts, dependency styles, and the scanner worker. Run `npm run prepare` separately when you need those artifacts without starting the app. The development server supports iteration; it is not the security or offline acceptance environment.
+Open `http://localhost:3000`. Both `dev` and `build` explicitly prepare local fonts, dependency styles, PDF rendering assets, and scanner/OCR workers and models. Run `npm run prepare` separately when you need those artifacts without starting the app. The development server supports iteration; it is not the security or offline acceptance environment.
 
 For the production static export and strict security headers:
 
@@ -57,13 +57,21 @@ Browser checks exercise synthetic imports, editing and keyboard controls, redact
 
 ## Using the scanner
 
-1. Choose Document, ID card, Passport, Book, or Batch. Fit the page inside its placement outline; ID and passport outlines use their physical aspect ratios and remain inside the visible camera image. The displayed millimeters describe the document, not its size on your screen. **Import** opens your device's image file picker for JPEG, PNG, or WebP files. A native camera input provides a fallback when live camera access is unavailable.
+1. Choose Document, ID card, Passport, Book, or Batch. Fit the page inside its placement outline; ID and passport outlines use their physical aspect ratios and remain inside the visible camera image. The displayed millimeters describe the document, not its size on your screen. **Import images or PDF** accepts JPEG, PNG, WebP, and unlocked PDF files. PDF pages retain their full page bounds and start with the Document cleanup filter. A native camera input provides a fallback when live camera access is unavailable.
 2. Capture manually, or let auto-capture wait for stable edges and acceptable light, glare, and blur. Book and Batch keep the camera open for another page. The capture tray shows the session's page count and recent thumbnails: select a thumbnail to edit that page, or press **Review** to open the editor with all captured pages. ID mode guides you through the front and back. Quality hints let you decide whether to retake a shot. Export scans to keep them beyond the current session.
 3. Adjust the crop corners, use Auto to re-detect, and inspect the flattened preview. For an angled photo of known paper, choose **Scanned paper size → A4**, Letter, or A5 in Crop to restore the physical proportions. Choosing an export paper size only changes the destination sheet. Original proportions remain the default for receipts and other shapes; ID and passport proportions are fixed. Filters and adjustment controls retain an edit recipe rather than modifying the original.
 4. Arrange the session: reorder, duplicate, or delete pages; select a paper preset, orientation, margin, and fit mode. New sessions use **Auto** orientation and **0 mm** added margin: each sheet follows the flattened scan and its rotation. **Fit scanned sheet to paper** restores those settings for an existing session. Explicit Portrait/Landscape settings and added margins remain available. Fit centers the entire scan without stretching or cutting it; a different source aspect ratio can leave white space. ID copy locks paper to A4 and places the front and back of ID-1 cards at 85.6 × 53.98 mm, with optional crop marks; Auto uses portrait A4 for that layout. Print the PDF at 100% or “actual size”; printer “fit to page” settings change the physical dimensions.
-5. Add opaque redactions and an optional watermark, inspect the export preview, and export. The editable filename shows a real name such as `document-2026-10-15.pdf`, using the scan's local date and the selected format's extension. PDFs contain multiple arranged sheets; image exports produce a separate file for each sheet. Browser sharing and image clipboard support vary, so downloading remains available.
+5. Add opaque redactions and an optional watermark, inspect the export preview, and choose an output. For searchable or clean text PDFs, select English, French, or English + French, press **Recognize text**, correct the results, and confirm that all sheets have been reviewed. Downloads and sharing require this confirmation; changing the scan or layout invalidates recognition, and editing recognized text requires confirmation again. The filename follows the scan's local date and selected extension. PDFs contain multiple pages; image exports produce one file per sheet. Browser sharing and image clipboard support vary.
 
-Imports are capped at 32 MiB, 40 megapixels, and 16,384 pixels on either edge. Large images are validated before worker decoding, then checked again after decoding. Perspective correction processes padded tiles to limit the WASM working set. An exported raster is capped at 48 megapixels; reduce custom paper size or DPI if it exceeds that cap. The live size estimate is approximate because scan content affects compression.
+| PDF output | Result |
+| --- | --- |
+| Enhanced scan | The edited page image, with redactions and watermark flattened into pixels. |
+| Searchable PDF | The enhanced scan plus a reviewed invisible text layer for search, selection, and copying. Visible letters retain the scan's appearance. |
+| Clean text PDF | Reviewed text typeset in a digital font, without scanned images. Text reflows and can span a different number of pages. |
+
+OCR runs on the final arranged, redacted pixels before adding a watermark. It does not reuse text from an imported PDF. Check names, numbers, accents, and reading order. Clean text output does not reconstruct tables, columns, graphics, or the original page layout. Handwriting accuracy is not promised, and OCR cannot reliably recover missing or severely blurred detail. Characters missing from the bundled PDF font produce an error so they can be corrected in review.
+
+Each imported file is capped at 32 MiB, and imports must fit within 40 total session pages. Images are capped at 40 megapixels and 16,384 pixels per edge; dimensions are validated before and after decoding. PDF pages are rendered one at a time at approximately 200 DPI, reduced when needed to 12 megapixels and 16,384 pixels per edge. Damaged, unsupported, or password-protected PDFs fail without adding a partial import. Progress and cancellation are available. OCR input is limited to 12 megapixels and a 6,000-pixel edge. Perspective correction uses padded tiles to limit the WASM working set. An exported raster is capped at 48 megapixels; reduce custom paper size or DPI if it exceeds that cap. The live size estimate is approximate.
 
 PNG and JPEG exports include the selected print density without EXIF. WebP has pixel dimensions derived from the selected DPI, with no EXIF added; PDF is the reliable format for physical page dimensions and true-size ID copies.
 
@@ -73,9 +81,10 @@ PNG and JPEG exports include the selected print density without EXIF. WebP has p
 - `scripts/prepare-assets.mjs` copies pinned Syne, Inter, and JetBrains Mono fonts from installed packages and bundles `lib/cv/worker.ts` together with the self-hosted OpenCV engine and its embedded WASM into `public/cv/worker.js`.
 - `scripts/opencv-csp.mjs` replaces the pinned engine's generated embind `createJsInvoker` and emval `__emval_create_invoker` with closure implementations. Preparation checks the expected binding boundaries and rejects remaining `eval` or `new Function` patterns. An OpenCV upgrade requires reviewing the patch and rerunning CV/browser checks.
 - `lib/asset-integrity.ts` records the combined worker's SHA-256 digest. The main thread fetches and verifies the complete artifact before creating a blob worker; its engine and embedded WASM are covered by the same digest. There is no separate runtime OpenCV fetch or `importScripts` step. `public/cv/opencv.js` is only a generated build/test artifact; postbuild removes its copy from `out/`, preventing duplicate download or precaching. No CDN is used at runtime.
+- PDF.js 6 renders imported PDFs to new PNG pages using a same-origin module worker, local CMaps, fonts, and WASM. Tesseract's LSTM core and embedded WASM are bundled with its worker; worker and English/French model bytes are verified before use. Models and the PDF output font come from pinned installed packages and are included in the static precache. Tesseract's IndexedDB cache is disabled.
 - Vaul and Sonner styles are extracted into `app/vendor.css`, and narrow build loaders remove their runtime style-block injection. Extraction fixes the pinned Vaul 1.1.2 stray colon in its handle hit-area rule. A separate adapter replaces `react-remove-scroll-bar` style injection with external CSS and a measured numeric scrollbar-width CSS variable. These adapters preserve `style-src 'self'` and fail if their expected dependency source changes.
 - `scripts/postbuild.mjs` hashes the emitted Next.js inline bootstrap scripts, adds a narrow same-origin Trusted Types policy before bootstrap, and emits the security header configuration. It also creates dotted aliases for Next's segment-prefetch files so ordinary static hosts can serve App Router navigation requests. It then builds a Serwist service worker with an explicit static precache and no runtime caching.
-- PDF generation is loaded when needed. Final export burns redactions into opaque pixels after enhancement, then draws arrangement and watermark, and embeds only the fresh raster. No original image is embedded in the PDF.
+- PDF generation is loaded when needed. Export burns redactions into opaque pixels after enhancement and before layout or OCR. Enhanced scans embed only fresh rasters; searchable PDFs add the reviewed OCR layer, and clean text PDFs embed only reviewed text and its font. Original image/PDF data and source metadata are never embedded.
 - The first-run explainer uses a native modal dialog; editing tools use Vaul. Sonner and import validation load when first needed. Destructive scan actions use Sonner confirmations. The worker bundler resolves only workspace files and installed packages through an explicit source loader, keeping native compilation from scanning unrelated parent directories.
 
 ## Hosting
@@ -97,9 +106,9 @@ Use a production build under `npm run preview` or the intended HTTPS host, not t
 1. Load the app online and wait for the real **Offline-ready** status. Allow the initial static precache to finish. Check DevTools Application → Service Workers for the active worker.
 2. Open Camera, Editor, Export, and Settings while online. Import one disposable image and complete an export so you know the browser supports the processing path.
 3. Close the current temporary session. Disable the network in DevTools, or turn on airplane mode on the device. Keep the app's installed files and browser site data.
-4. Reload or reopen the installed PWA. The app shell, local fonts, and scanner engine should load. Import a new image or capture a new document, crop it, change a filter, redact a field, arrange it, and export a PDF and an image.
+4. Reload or reopen the installed PWA. The app shell, fonts, scanner, PDF renderer, and OCR models should load. Import an image and a scanned PDF, crop and enhance a page, redact a field, and export an image and each PDF mode. Recognize English/French text, correct a word, and confirm review before downloading the OCR outputs.
 5. Confirm Network shows no third-party requests and no request body or URL containing image data. Any requests for app assets must be served by the service worker while offline.
-6. Inspect Cache Storage. Entries should be build assets only, with no scan names, thumbnails, originals, or export blobs. IndexedDB should have no Vault or draft scan database.
+6. Inspect Cache Storage. Entries should be build assets only, including static language models, with no scan names, thumbnails, originals, recognized text, or export blobs. IndexedDB should contain no scan database or OCR model cache.
 7. Reload once more. The disposable scan session should be empty while the app remains usable offline.
 
 Failures are release blockers for the offline claim. Browser eviction of app assets can require another online load; the app does not request persistent storage for a scan library.
@@ -118,15 +127,15 @@ The following matrix must be performed on actual devices and recorded before cla
 | PWA | Install via Add to Home Screen; airplane-mode procedure | Install prompt after a successful scan; airplane mode | Active-worker status, offline reload, update flow |
 | Accessibility | VoiceOver, focus visibility, reduced motion, safe-area layout | TalkBack, touch targets, reduced motion | Keyboard-only flow, screen reader labels, light/dark contrast |
 
-Also inspect a final PDF with a PDF parser and exported images with a metadata tool: no EXIF/GPS, blank PDF Author/Creator/Producer, and no original or hidden layer behind redaction. Print an ID-copy PDF at 100% and measure both sides against 85.6 × 53.98 mm.
+Also inspect final files with a PDF parser and metadata tool: no EXIF/GPS, blank PDF Author/Creator/Producer, and no original or recoverable content behind redaction. Searchable PDFs intentionally contain reviewed text; verify that redacted content is absent from extraction. Clean text PDFs should contain no scanned images. Print an ID-copy PDF at 100% and measure both sides against 85.6 × 53.98 mm.
 
 Check signature motions on those devices: crop corners move into the real flattened result, filter previews crossfade briefly, compare remains instant, and export completion draws a checkmark. Enable reduced motion and repeat; state changes must remain clear without moving the document or corners.
 
 ## Verification status
 
-Local verification passed TypeScript (including the service worker), ESLint, 39 unit tests, the static production build, and five browser flows in Edge. The browser flows check opaque redaction pixels inside the final PDF and images, blank PDF metadata, all four export formats, full offline import/export after a reload, memory-only session reset, no third-party requests or image-data requests, no CSP violations, accessible controls, and mobile layout. The dependency audit reported zero vulnerabilities for the installed dependency versions.
+Local verification on 2026-10-17 passed TypeScript, ESLint, 131 unit tests, the static production build, and 12 Edge browser flows. The checks cover scanner/camera behavior, PDF import, offline English/French recognition, cancellation, review gating and corrections, searchable extraction, clean text PDF output, redacted text absence, blank metadata, no document uploads or third-party requests, strict CSP, accessibility, and mobile layout. The npm advisory audit reported zero vulnerabilities. Rerun `npm run verify`, `npm run test:browser`, and the advisory audit after changes. Evidence and synthetic downloads stay under `.qa/`.
 
-Initial modern JavaScript measures 152,549 gzip bytes (149.0 KiB), excluding legacy polyfills, lazy processing/editor/export chunks, CSS, HTML, and fonts. Run `node scripts/measure-shell.mjs` after a build to reproduce that measurement; the full app-shell asset total still needs comparison with the spec's broader budget.
+The current build measured 156,256 gzip bytes (152.6 KiB) of initial modern JavaScript, excluding legacy polyfills, lazy processing/editor/export chunks, CSS, HTML, and fonts. Run `node scripts/measure-shell.mjs` to reproduce it. The full static offline precache, including PDF/OCR engines and models, contains 290 assets totaling approximately 27.9 MiB before HTTP compression; this broader download still needs comparison with the spec's budget.
 
 A strict-CSP desktop Chrome worker check processed a 12 MP synthetic image at full resolution: Auto rendering took approximately 3.4 seconds, and Document rendering with adjustments, sharpness, rotation, and flip took approximately 8.3 seconds. Those measurements are worker rendering times on a desktop, not capture-to-export timings or proof on the target phones.
 

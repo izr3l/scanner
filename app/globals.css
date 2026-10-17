@@ -258,7 +258,14 @@ input[type="range"] { accent-color:var(--accent); cursor:pointer; }
 .toggle-track::after { content:''; width:8px; height:8px; border-radius:50%; background:var(--text-muted); display:block; transition:transform 180ms var(--ease-out); }
 .toggle-track.on { background:var(--accent); }
 .toggle-track.on::after { background:#063722; transform:translateX(10px); }
-.vault-toast [data-title],.vault-toast [data-description] { color:var(--text) !important; }
+/* Keep a toast's foreground and opaque surface on the same theme during mount. */
+[data-sonner-toaster].vault-toaster[data-sonner-theme="dark"] { --normal-bg:#1A1D26; --normal-text:#F2F3F7; --normal-border:rgba(255,255,255,.08); --normal-bg-hover:#252A36; --normal-border-hover:#404858; }
+[data-sonner-toaster].vault-toaster[data-sonner-theme="light"] { --normal-bg:#FFFFFF; --normal-text:#14151A; --normal-border:rgba(20,20,30,.09); --normal-bg-hover:#F6F4EF; --normal-border-hover:#C8CBD2; }
+[data-sonner-toaster].vault-toaster .vault-toast [data-title],[data-sonner-toaster].vault-toaster .vault-toast [data-description] { color:var(--normal-text) !important; }
+/* Slide notifications at full contrast instead of fading readable text. */
+[data-sonner-toaster].vault-toaster [data-sonner-toast].vault-toast { transition-property:transform,box-shadow !important; }
+[data-sonner-toaster].vault-toaster [data-sonner-toast].vault-toast>* { transition:none; }
+[data-sonner-toaster].vault-toaster [data-sonner-toast].vault-toast[data-swiping="true"] { transition:none; }
 .arrow-forward { transform:rotate(180deg); }
 .capture-flash { position:absolute; inset:0; z-index:5; background:white; opacity:0; pointer-events:none; }
 .capture-flash.visible { opacity:.6; }

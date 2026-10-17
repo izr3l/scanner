@@ -5,7 +5,7 @@ import { useReducedMotion } from "motion/react";
 import { warpGeometry } from "@/lib/cv/geometry";
 import type { Point, ScanPage } from "@/lib/types";
 import { ImagePlane } from "./image-plane";
-import { useObjectUrl } from "./use-object-url";
+import { BlobImage } from "./blob-image";
 
 function edgeTransform(a: Point, b: Point): string {
   return `translate(${a.x}px,${a.y}px) rotate(${Math.atan2(b.y - a.y, b.x - a.x)}rad) scaleX(${Math.hypot(b.x - a.x, b.y - a.y)})`;
@@ -13,14 +13,12 @@ function edgeTransform(a: Point, b: Point): string {
 
 /** The real source corners move to their corresponding locations in the decoded CV result. */
 export function FlattenPreview({ page, blob, onComplete, onSize }: { page: ScanPage; blob: Blob | null; onComplete: () => void; onSize: (size: { width: number; height: number }) => void }) {
-  const original = useObjectUrl(page.original);
-  const output = useObjectUrl(blob);
   const reduced = useReducedMotion();
   const plane = useRef<HTMLDivElement>(null);
   const complete = useRef(onComplete);
   complete.current = onComplete;
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
-  const [decoded, setDecoded] = useState<{ url: string; width: number; height: number } | null>(null);
+  const [decoded, setDecoded] = useState<{ blob: Blob; width: number; height: number } | null>(null);
   const [active, setActive] = useState(false);
   const geometry = useMemo(() => {
     try { return warpGeometry(page.corners, page.type, page.width, page.height, page.recipe.paperSize); }
@@ -36,7 +34,7 @@ export function FlattenPreview({ page, blob, onComplete, onSize }: { page: ScanP
   }, []);
 
   useEffect(() => {
-    if (!output || decoded?.url !== output || !bounds.width || !geometry) return;
+    if (!blob || decoded?.blob !== blob || !bounds.width || !geometry) return;
     let second = 0;
     let timeout = 0;
     const first = window.requestAnimationFrame(() => {
@@ -46,10 +44,10 @@ export function FlattenPreview({ page, blob, onComplete, onSize }: { page: ScanP
       });
     });
     return () => { window.cancelAnimationFrame(first); window.cancelAnimationFrame(second); window.clearTimeout(timeout); };
-  }, [output, decoded, bounds.width, geometry, reduced]);
+  }, [blob, decoded, bounds.width, geometry, reduced]);
 
   let from: Point[] = [], to: Point[] = [];
-  if (geometry && decoded?.url === output) {
+  if (geometry && decoded?.blob === blob) {
     from = geometry.corners.map((point) => ({ x: point.x / page.width * bounds.width, y: point.y / page.height * bounds.height }));
     const scale = Math.min(bounds.width / decoded.width, bounds.height / decoded.height);
     const angle = (Number.isFinite(page.recipe.rotation) ? page.recipe.rotation : 0) * Math.PI / 180;
@@ -61,8 +59,8 @@ export function FlattenPreview({ page, blob, onComplete, onSize }: { page: ScanP
   }
   const points = active && !reduced ? to : from;
   return <ImagePlane width={page.width} height={page.height} className="flatten-stage"><div ref={plane} className={`flatten-plane ${active ? "is-flattened" : ""}`}>
-    {original ? <img className="flatten-source" src={original} alt="Document crop being flattened" draggable={false} /> : null}
-    {output ? <img className="flatten-result" src={output} alt="Flattened and enhanced document" draggable={false} onLoad={(event) => { const image = event.currentTarget; const size = { width: image.naturalWidth, height: image.naturalHeight }; setDecoded({ url: output, ...size }); onSize(size); }} /> : null}
+    <BlobImage blob={page.original} className="flatten-source" alt="Document crop being flattened" draggable={false} />
+    <BlobImage blob={blob} className="flatten-result" alt="Flattened and enhanced document" draggable={false} onLoad={(event) => { if (!blob) return; const image = event.currentTarget; const size = { width: image.naturalWidth, height: image.naturalHeight }; setDecoded({ blob, ...size }); onSize(size); }} />
     <div className="flatten-corners" aria-hidden="true">{points.map((point, index) => <div key={index}><i className="flatten-edge" style={{ transform: edgeTransform(point, points[(index + 1) % points.length]) }} /><i className="flatten-corner" style={{ transform: `translate(${point.x}px,${point.y}px)` }} /></div>)}</div>
   </div></ImagePlane>;
 }

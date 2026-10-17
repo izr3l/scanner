@@ -44,6 +44,8 @@ export interface ArrangeOptions {
 }
 export interface ExportOptions {
   format: 'pdf' | 'png' | 'jpeg' | 'webp';
+  pdfMode?: 'scan' | 'searchable' | 'text';
+  ocrLanguage?: import('./ocr/types').OcrLanguage;
   dpi: 150 | 200 | 300;
   quality: number;
   filename: string;

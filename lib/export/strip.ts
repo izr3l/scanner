@@ -47,8 +47,11 @@ export async function loadPixels(blob: Blob): Promise<{ source: CanvasImageSourc
       img.onerror = () => reject(new Error('The processed image could not be decoded.'));
       img.src = url;
     });
-    return { source: img, width: img.naturalWidth, height: img.naturalHeight, release: () => { img.src = ''; } };
-  } finally {
+    let released = false;
+    return { source: img, width: img.naturalWidth, height: img.naturalHeight, release: () => { if (released) return; released = true; img.removeAttribute('src'); URL.revokeObjectURL(url); } };
+  } catch (error) {
+    img.removeAttribute('src');
     URL.revokeObjectURL(url);
+    throw error;
   }
 }

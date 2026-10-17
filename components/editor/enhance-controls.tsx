@@ -3,7 +3,7 @@
 import { FlipHorizontal, RotateCcw, RotateCw, SlidersHorizontal } from "lucide-react";
 import type { Recipe, ScanFilter, ScanPage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { useObjectUrl } from "./use-object-url";
+import { BlobImage } from "./blob-image";
 
 const FILTERS: { id: ScanFilter; label: string }[] = [
   { id: "original", label: "Original" }, { id: "auto", label: "Auto" }, { id: "document", label: "Document" },
@@ -11,12 +11,11 @@ const FILTERS: { id: ScanFilter; label: string }[] = [
 ];
 
 export function EnhanceControls({ page, onChange }: { page: ScanPage; onChange: (patch: Partial<Recipe>) => void }) {
-  const url = useObjectUrl(page.original);
   const quarter = Math.round(page.recipe.rotation / 90) * 90;
   const fine = Math.round((page.recipe.rotation - quarter) * 10) / 10;
   return <div className="editor-controls">
     <div className="editor-control-heading"><span>Make every detail clear</span><SlidersHorizontal size={16} /></div>
-    <div className="editor-filter-grid" role="group" aria-label="Enhancement filter">{FILTERS.map((filter) => <button type="button" key={filter.id} className={`editor-filter filter-${filter.id} ${page.recipe.filter === filter.id ? "is-selected" : ""}`} aria-pressed={page.recipe.filter === filter.id} onClick={() => onChange({ filter: filter.id })}><span className="editor-filter-image">{url ? <img src={url} alt="" draggable={false} /> : null}<span className="editor-filter-check">✓</span></span><span>{filter.label}</span></button>)}</div>
+    <div className="editor-filter-grid" role="group" aria-label="Enhancement filter">{FILTERS.map((filter) => <button type="button" key={filter.id} className={`editor-filter filter-${filter.id} ${page.recipe.filter === filter.id ? "is-selected" : ""}`} aria-pressed={page.recipe.filter === filter.id} onClick={() => onChange({ filter: filter.id })}><span className="editor-filter-image"><BlobImage blob={page.original} alt="" draggable={false} /><span className="editor-filter-check">✓</span></span><span>{filter.label}</span></button>)}</div>
     <div className="editor-divider" />
     {([{ key: "brightness", label: "Brightness", min: -100, max: 100 }, { key: "contrast", label: "Contrast", min: -100, max: 100 }, { key: "sharpness", label: "Sharpness", min: 0, max: 100 }] as const).map((slider) => <label className="editor-slider" key={slider.key}><span>{slider.label}<output>{page.recipe[slider.key] > 0 && slider.key !== "sharpness" ? "+" : ""}{page.recipe[slider.key]}</output></span><input type="range" aria-label={slider.label} min={slider.min} max={slider.max} step={1} value={page.recipe[slider.key]} onChange={(event) => onChange({ [slider.key]: Number(event.target.value) })} /></label>)}
     <div className="editor-divider" />

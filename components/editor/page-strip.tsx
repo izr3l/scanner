@@ -7,14 +7,13 @@ import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import type { ScanPage } from "@/lib/types";
 import { useSession } from "@/stores/session";
-import { useObjectUrl } from "./use-object-url";
+import { BlobImage } from "./blob-image";
 
 function PageThumbnail({ page, index, selected, onSelect }: { page: ScanPage; index: number; selected: boolean; onSelect: () => void }) {
-  const url = useObjectUrl(page.original);
   const controls = useDragControls();
   const reduced = useReducedMotion();
   return <Reorder.Item value={page.id} dragListener={false} dragControls={controls} className={`editor-page-card ${selected ? "is-selected" : ""}`} transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 450, damping: 35 }} whileDrag={{ scale: reduced ? 1 : 1.03, zIndex: 2 }}>
-    <button type="button" className="editor-page-select" onClick={onSelect} aria-label={`Edit page ${index + 1}`} aria-current={selected ? "true" : undefined}>{url ? <img src={url} alt="" draggable={false} /> : <span className="editor-thumbnail-placeholder" />}<span className="editor-page-number">{String(index + 1).padStart(2, "0")}</span></button>
+    <button type="button" className="editor-page-select" onClick={onSelect} aria-label={`Edit page ${index + 1}`} aria-current={selected ? "true" : undefined}><BlobImage blob={page.original} alt="" draggable={false} /><span className="editor-page-number">{String(index + 1).padStart(2, "0")}</span></button>
     <button type="button" className="editor-page-grip" onPointerDown={(event) => controls.start(event)} aria-label={`Drag to reorder page ${index + 1}. Use the move buttons for keyboard reordering.`}><GripVertical size={15} /></button>
   </Reorder.Item>;
 }

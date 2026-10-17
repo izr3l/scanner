@@ -10,7 +10,7 @@ import { QuadOverlay } from '@/components/camera/quad-overlay';
 import { PlacementGuide } from '@/components/camera/placement-guide';
 import { CaptureTray } from '@/components/camera/capture-tray';
 import { CAPTURE_GUIDES } from '@/lib/camera-guide';
-import { useObjectUrl } from '@/components/editor/use-object-url';
+import { BlobImage } from '@/components/editor/blob-image';
 import { useImport } from '@/components/use-import';
 import { useSession } from '@/stores/session';
 import { useSettings } from '@/stores/settings';
@@ -40,14 +40,13 @@ export default function ScanPage() {
   const [flash, setFlash] = useState(false);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [stacking, setStacking] = useState(false);
-  const snapshotUrl = useObjectUrl(capturedBlob);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torch, setTorch] = useState(false);
   const [facing, setFacing] = useState<'environment'|'user'>('environment');
   const autoCapture = useSettings((s) => s.autoCapture);
   const setAutoCapture = useSettings((s) => s.setAutoCapture);
   const idCount = useSession((s) => s.pages.filter((page) => page.type === 'id').length);
-  const { importing, importFiles } = useImport();
+  const { importing, importProgress, importFiles, cancelImport } = useImport();
   const stopCamera = useCallback(() => { cameraGeneration.current++; streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (video.current) video.current.srcObject = null; }, []);
   const startCamera = useCallback(async () => {
     stopCamera(); setCameraState('starting'); setCameraError(''); setTorch(false); setTorchAvailable(false);
@@ -139,7 +138,7 @@ export default function ScanPage() {
     <main id="main-content" className="camera-main">
       <div ref={stage} className="camera-view">
         <video ref={video} autoPlay muted playsInline aria-label="Live camera view" />
-        {snapshotUrl && <img className={`camera-snapshot ${stacking ? 'is-stacking' : ''}`} src={snapshotUrl} alt="Captured document" />}
+        <BlobImage blob={capturedBlob} className={`camera-snapshot ${stacking ? 'is-stacking' : ''}`} alt="Captured document" />
         {cameraState === 'ready' && <PlacementGuide stage={stage} video={video} mode={mode} backOfCard={idCount % 2 === 1} />}
         {detection && !detection.fallback && cameraState === 'ready' && <QuadOverlay detection={detection} />}
         <div className={`capture-flash ${flash ? 'visible' : ''}`} />
@@ -150,7 +149,7 @@ export default function ScanPage() {
             <p>{cameraState === 'paused' ? 'The camera stops when you leave the app. Resume when you are ready.' : cameraError}</p>
             <div className="camera-fallback-actions">
               <Button onClick={() => cameraState === 'paused' || cameraState === 'denied' ? void startCamera() : captureInput.current?.click()}><Camera size={17} />{cameraState === 'paused' ? 'Resume camera' : cameraState === 'denied' ? 'Try camera again' : 'Take a photo'}</Button>
-              <Button variant="secondary" onClick={() => fileInput.current?.click()}><ImagePlus size={17} />Import images</Button>
+              <Button variant="secondary" onClick={() => fileInput.current?.click()}><ImagePlus size={17} />Import images or PDF</Button>
             </div>
           </>}
         </div>}
@@ -158,10 +157,11 @@ export default function ScanPage() {
       </div>
       <div className="camera-bottom">
         <CaptureTray disabled={busy || importing} />
-        <p className="capture-hint" role="status">{cameraState === 'ready' ? hint : 'No uploads. Your photos stay yours.'}</p>
+        <p className="capture-hint" role="status">{importing ? importProgress : cameraState === 'ready' ? hint : 'No uploads. Your photos stay yours.'}</p>
+        {importing && <Button variant="secondary" onClick={cancelImport}>Cancel import</Button>}
         <div className="mode-pills" aria-label="Capture mode">{modes.map((item) => <button key={item} disabled={busy || importing} aria-pressed={mode === item} onClick={() => setMode(item)}>{MODE_LABELS[item]}</button>)}</div>
         <div className="camera-controls">
-          <button className="camera-control gallery-control" aria-label="Import images from device" disabled={importing || busy} onClick={() => fileInput.current?.click()}><ImagePlus size={23} /><span>Import</span></button>
+          <button className="camera-control gallery-control" aria-label="Import images or PDF from device" disabled={importing || busy} onClick={() => fileInput.current?.click()}><ImagePlus size={23} /><span>Import</span></button>
           <button className="shutter" aria-label="Capture document" disabled={busy || importing || !engineReady || cameraState !== 'ready'} onClick={() => void capture()}>
             <svg viewBox="0 0 90 90" aria-hidden="true"><circle className="shutter-ring" cx="45" cy="45" r="41" /><circle className="shutter-progress" cx="45" cy="45" r="41" strokeDasharray="257.6" strokeDashoffset={257.6 * (1 - progress)} /></svg>
             <span>{busy ? <LoaderCircle className="spin" size={25} /> : <ScanLine size={26} />}</span>
@@ -174,7 +174,7 @@ export default function ScanPage() {
         </div>
       </div>
     </main>
-    <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Choose images" />
+    <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Choose images or PDF" />
     <input ref={captureInput} className="sr-only" type="file" accept="image/*" capture="environment" onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Take a photo with your camera app" />
   </div>;
 }
