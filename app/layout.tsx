@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import { Providers } from '@/components/providers';
 import './globals.css';
 import './vendor.css';
+import './mobile-dock.css';
 const inter = localFont({ src: './fonts/inter.woff2', variable: '--font-inter', weight: '100 900', style: 'normal', display: 'swap' });
 const syne = localFont({ src: './fonts/syne.woff2', variable: '--font-syne', weight: '400 800', style: 'normal', display: 'swap' });
 const mono = localFont({ src: './fonts/mono.woff2', variable: '--font-mono', weight: '100 800', style: 'normal', display: 'swap', preload: false });

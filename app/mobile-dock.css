@@ -1,0 +1,152 @@
+/* One bounded material layer; foreground links never receive a blur or filter. */
+:root {
+  --mobile-dock-height: max(72px, calc(3rem + 24px));
+  --mobile-dock-gap: 12px;
+  --mobile-dock-clearance: calc(var(--mobile-dock-height) + var(--mobile-dock-gap) + 16px + env(safe-area-inset-bottom, 0px));
+  --dock-solid: #20242d;
+  --dock-tint: rgba(24, 28, 36, .82);
+  --dock-edge: rgba(255, 255, 255, .18);
+  --dock-rim: rgba(255, 255, 255, .22);
+  --dock-label: #d0d4df;
+  --dock-active: #7af2bd;
+  --dock-selection: rgba(255, 255, 255, .09);
+  --dock-selection-edge: rgba(255, 255, 255, .12);
+  --dock-shadow: rgba(0, 0, 0, .32);
+}
+:root[data-theme="light"] {
+  --dock-solid: #fafaf8;
+  --dock-tint: rgba(250, 250, 248, .84);
+  --dock-edge: rgba(35, 43, 55, .15);
+  --dock-rim: rgba(255, 255, 255, .92);
+  --dock-label: #3f4652;
+  --dock-active: #065637;
+  --dock-selection: rgba(33, 46, 39, .075);
+  --dock-selection-edge: rgba(35, 43, 55, .08);
+  --dock-shadow: rgba(32, 38, 46, .16);
+}
+.mobile-dock-positioner { display: none; }
+
+@media (max-width: 850px) {
+  html { scroll-padding-bottom: calc(var(--mobile-dock-clearance) + 16px); }
+  .mobile-dock-positioner {
+    position: fixed;
+    inset-inline-start: calc(var(--mobile-dock-gap) + env(safe-area-inset-left, 0px));
+    inset-inline-end: calc(var(--mobile-dock-gap) + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--mobile-dock-gap) + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    justify-content: center;
+    z-index: 40;
+    pointer-events: none;
+  }
+  .mobile-dock-positioner[data-keyboard-open="true"] { display: none; }
+  .mobile-dock-positioner .mobile-nav {
+    --dock-index: 0;
+    position: relative;
+    inset: auto;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    width: 100%;
+    max-width: 420px;
+    height: var(--mobile-dock-height);
+    padding: 7px;
+    border: 1px solid var(--dock-edge);
+    border-radius: calc(var(--mobile-dock-height) / 2);
+    background: var(--dock-solid);
+    box-shadow: 0 10px 32px var(--dock-shadow), 0 2px 6px rgba(0, 0, 0, .08), inset 0 1px 0 var(--dock-rim), inset 0 -1px 0 rgba(0, 0, 0, .12);
+    isolation: isolate;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+  .mobile-nav[data-active="scan"] { --dock-index: 1; }
+  .mobile-nav[data-active="edit"] { --dock-index: 2; }
+  .mobile-nav[data-active="export"] { --dock-index: 3; }
+  .mobile-nav[data-active="settings"] { --dock-index: 4; }
+  .mobile-nav::before, .mobile-nav::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .mobile-nav::before {
+    background: linear-gradient(118deg, rgba(255, 255, 255, .1), transparent 34%, transparent 70%, rgba(255, 255, 255, .035));
+  }
+  .mobile-nav::after {
+    inset: 1px;
+    border: 1px solid transparent;
+    border-top-color: var(--dock-rim);
+    border-bottom-color: rgba(255, 255, 255, .035);
+  }
+  .mobile-dock-selection {
+    position: absolute;
+    inset-block: 7px;
+    left: 7px;
+    width: calc((100% - 14px) / 5);
+    border-radius: calc(var(--mobile-dock-height) / 2 - 7px);
+    background: var(--dock-selection);
+    border: 1px solid var(--dock-selection-edge);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 2px 5px rgba(0, 0, 0, .05);
+    transform: translateX(calc(var(--dock-index) * 100%));
+    transition: transform 340ms cubic-bezier(.2, .82, .2, 1);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .mobile-nav .mobile-dock-link {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 44px;
+    padding: 4px 2px;
+    gap: 4px;
+    border-radius: calc(var(--mobile-dock-height) / 2 - 7px);
+    color: var(--dock-label);
+    font-size: .6875rem;
+    font-weight: 500;
+    line-height: 1.15;
+    text-align: center;
+    touch-action: manipulation;
+    transition: color 160ms ease;
+  }
+  .mobile-dock-label { max-width: 100%; overflow-wrap: anywhere; }
+  .mobile-dock-icon { display: flex; transition: transform 160ms var(--ease-out); }
+  .mobile-nav .mobile-dock-link[aria-current="page"] { color: var(--dock-active); font-weight: 650; }
+  .mobile-dock-link[aria-current="page"] svg { stroke-width: 2; }
+  .mobile-nav .mobile-dock-link:focus-visible { outline: 2px solid var(--dock-active); outline-offset: -3px; }
+  .mobile-nav .mobile-dock-link:active { transform: none; background: var(--dock-selection); }
+  .mobile-dock-link:active .mobile-dock-icon { transform: scale(.9); }
+  .app-shell .app-footer { padding-bottom: calc(var(--mobile-dock-clearance) + 16px); }
+  .app-shell .editor-mobile-actions { bottom: var(--mobile-dock-clearance); }
+  body .install-pill { bottom: calc(var(--mobile-dock-clearance) + 8px); }
+  [data-sonner-toaster].vault-toaster[data-y-position="bottom"] { bottom: calc(var(--mobile-dock-clearance) + 8px) !important; }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .mobile-dock-positioner .mobile-nav {
+      background: var(--dock-tint);
+      -webkit-backdrop-filter: blur(22px) saturate(1.45);
+      backdrop-filter: blur(22px) saturate(1.45);
+    }
+  }
+}
+
+@media (max-width: 850px) and (prefers-reduced-motion: reduce) {
+  .mobile-dock-selection, .mobile-dock-icon, .mobile-nav .mobile-dock-link { transition: none !important; }
+  .mobile-dock-link:active .mobile-dock-icon { transform: none; }
+}
+@media (max-width: 850px) and (prefers-reduced-transparency: reduce), (max-width: 850px) and (prefers-contrast: more) {
+  .mobile-dock-positioner .mobile-nav { background: var(--dock-solid); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--dock-label); }
+  .mobile-dock-selection { border-color: var(--dock-label); }
+  .mobile-nav::before, .mobile-nav::after { display: none; }
+}
+@media (max-width: 850px) and (forced-colors: active) {
+  .mobile-dock-positioner .mobile-nav { background: Canvas; color: CanvasText; border: 2px solid CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .mobile-dock-selection { background: Canvas; border: 2px solid Highlight; box-shadow: none; }
+  .mobile-nav .mobile-dock-link { color: LinkText; }
+  .mobile-nav .mobile-dock-link[aria-current="page"] { color: Highlight; }
+  .mobile-nav .mobile-dock-link:focus-visible { outline-color: Highlight; }
+  .mobile-nav::before, .mobile-nav::after { display: none; }
+}
