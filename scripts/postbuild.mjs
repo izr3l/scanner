@@ -27,5 +27,5 @@ await writeFile('out/_headers', `/*\n${Object.entries(headers).map(([key, value]
 await writeFile('out/security-headers.json', JSON.stringify(headers, null, 2));
 await writeFile('vercel.json', JSON.stringify({ version: 2, buildCommand: 'npm run build', outputDirectory: 'out', framework: null, headers: [{ source: '/(.*)', headers: Object.entries(headers).map(([key, value]) => ({ key, value })) }] }, null, 2));
 await bundleLocal('sw.ts', 'out/sw.js');
-const sw = await injectManifest({ swSrc: 'out/sw.js', swDest: 'out/sw.js', globDirectory: 'out', globPatterns: ['**/*.{html,js,css,woff2,png,svg,webmanifest,txt}'], globIgnores: ['sw.js', 'security-headers.json'], maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, modifyURLPrefix: { '': '/' } });
+const sw = await injectManifest({ swSrc: 'out/sw.js', swDest: 'out/sw.js', globDirectory: 'out', globPatterns: ['**/*.{html,js,mjs,css,woff2,png,svg,webmanifest,txt,wasm,bcmap,pfb,ttf,gz}'], globIgnores: ['sw.js', 'security-headers.json'], maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, modifyURLPrefix: { '': '/' } });
 console.log(`Static export secured; ${sw.count} app assets precached (${(sw.size / 1024 / 1024).toFixed(1)} MB). Scans are never cached.`);

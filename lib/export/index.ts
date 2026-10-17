@@ -1,4 +1,5 @@
 import type { ExportOptions, ExportResult, ScanPage } from '@/lib/types';
+import type { OcrPage, OcrProgress } from '@/lib/ocr/types';
 import { mmToPixels, pageSizeMM } from '@/lib/presets';
 import { arrangePages, type Placement, type SheetLayout } from './layout';
 import { encodeImage } from './image';
@@ -10,6 +11,7 @@ import { exportFilename } from './filename';
 
 export type { ExportResult } from '@/lib/types';
 export { exportFilename } from './filename';
+export { normalizeOcrText, ocrPageText } from './ocr-text';
 
 function ensurePages(pages: ScanPage[]) {
   if (!pages.length) throw new Error('Add at least one scan before exporting.');
@@ -37,7 +39,7 @@ function drawCropMarks(context: CanvasRenderingContext2D, placement: Placement, 
   context.restore();
 }
 
-async function renderSheet(pages: ScanPage[], options: ExportOptions, preview: boolean): Promise<{ canvas: HTMLCanvasElement; layout: SheetLayout }> {
+async function renderSheet(pages: ScanPage[], options: ExportOptions, preview: boolean, includeWatermark = true): Promise<{ canvas: HTMLCanvasElement; layout: SheetLayout }> {
   const { renderPage } = await import('@/lib/cv/client');
   const images: HTMLCanvasElement[] = [];
   let output: HTMLCanvasElement | undefined;
@@ -81,7 +83,7 @@ async function renderSheet(pages: ScanPage[], options: ExportOptions, preview: b
       context.restore();
       if (placement.cropMarks) drawCropMarks(context, placement, scaleX, scaleY);
     }
-    drawWatermark(context, options.watermark);
+    if (includeWatermark) drawWatermark(context, options.watermark);
     return { canvas: output, layout };
   } catch (error) {
     if (output) releaseCanvas(output);
@@ -105,6 +107,49 @@ export async function renderArrangedPreview(pages: ScanPage[], options: ExportOp
   finally { releaseCanvas(canvas); }
 }
 
+function checkCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Text recognition was cancelled.', 'AbortError');
+}
+
+/** Recognize only final arranged pixels after security edits. No source PDF text is reused. */
+export async function recognizeExport(pages: ScanPage[], options: ExportOptions, onProgress?: (progress: OcrProgress) => void, signal?: AbortSignal): Promise<OcrPage[]> {
+  ensurePages(pages);
+  checkCancelled(signal);
+  const groups = groupPages(pages, options);
+  const { createOcrEngine } = await import('@/lib/ocr/client');
+  let currentPage = 1;
+  const report = (status: string, progress: number) => onProgress?.({ page: currentPage, total: groups.length, status, progress });
+  const engine = await createOcrEngine(options.ocrLanguage ?? 'eng+fra', (progress) => report(progress.status, progress.progress), signal);
+  const recognized: OcrPage[] = [];
+  try {
+    for (let index = 0; index < groups.length; index++) {
+      currentPage = index + 1;
+      checkCancelled(signal);
+      report('Preparing page', 0);
+      // Watermarks are added only to output; recognizing them would contaminate copy/search.
+      const { canvas } = await renderSheet(groups[index], options, false, false);
+      const sourceWidth = canvas.width, sourceHeight = canvas.height;
+      let blob: Blob;
+      try { blob = await canvasBlob(canvas); }
+      finally { releaseCanvas(canvas); }
+      checkCancelled(signal);
+      report('Recognizing text', 0);
+      const result = await engine.recognize(blob);
+      if (![result.width, result.height].every((dimension) => Number.isFinite(dimension) && dimension > 0)) throw new Error('Text recognition returned an invalid page. Try recognizing it again.');
+      const scaleX = sourceWidth / result.width, scaleY = sourceHeight / result.height;
+      recognized.push({
+        ...result, width: sourceWidth, height: sourceHeight,
+        words: result.words.map((word) => ({ ...word, bbox: { x0: word.bbox.x0 * scaleX, y0: word.bbox.y0 * scaleY, x1: word.bbox.x1 * scaleX, y1: word.bbox.y1 * scaleY } })),
+      });
+      checkCancelled(signal);
+      report('Page ready for review', 1);
+    }
+    return recognized;
+  } finally {
+    await engine.terminate();
+  }
+}
+
 /** Image formats yield one file per arranged sheet, preserving every scan without an archive. */
 export async function createImageExports(pages: ScanPage[], options: ExportOptions): Promise<ExportResult[]> {
   ensurePages(pages);
@@ -121,21 +166,32 @@ export async function createImageExports(pages: ScanPage[], options: ExportOptio
   return results;
 }
 
-export async function createExport(pages: ScanPage[], options: ExportOptions): Promise<ExportResult> {
+export async function createExport(pages: ScanPage[], options: ExportOptions, ocrPages?: OcrPage[]): Promise<ExportResult> {
   ensurePages(pages);
   const groups = groupPages(pages, options);
   if (options.format !== 'pdf') {
     if (groups.length > 1) throw new Error('Multiple image pages produce separate files. Use createImageExports or choose PDF.');
     return (await createImageExports(pages, options))[0];
   }
+  const mode = options.pdfMode ?? 'scan';
+  if (mode !== 'scan' && ocrPages?.length !== groups.length) throw new Error('Recognize and review every page before exporting this PDF.');
   const sheets: PdfSheet[] = [];
-  for (const group of groups) {
+  for (let index = 0; index < groups.length; index++) {
+    const group = groups[index];
     const { canvas, layout } = await renderSheet(group, options, false);
-    try { sheets.push({ blob: await canvasBlob(canvas), width: layout.width, height: layout.height }); }
+    try {
+      const recognized = ocrPages?.[index];
+      if (mode !== 'scan' && (recognized?.width !== canvas.width || recognized?.height !== canvas.height)) {
+        throw new Error('The page layout changed after recognition. Recognize the text again before exporting.');
+      }
+      // Text-only output is rebuilt entirely from reviewed text; raster bytes stay out of it.
+      sheets.push({ blob: mode === 'text' ? new Blob() : await canvasBlob(canvas), width: layout.width, height: layout.height });
+    }
     finally { releaseCanvas(canvas); }
   }
-  const { createPdf } = await import('./pdf');
-  return { blob: await createPdf(sheets), filename: exportFilename(pages, options), pageCount: sheets.length };
+  const { createPdfExport } = await import('./pdf');
+  const result = await createPdfExport(sheets, { mode, ocrPages, margin: options.arrangement.margin, watermark: options.watermark });
+  return { ...result, filename: exportFilename(pages, options) };
 }
 
 export function estimateExportBytes(pages: ScanPage[], options: ExportOptions): number {

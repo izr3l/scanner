@@ -46,7 +46,7 @@ export default function ScanPage() {
   const autoCapture = useSettings((s) => s.autoCapture);
   const setAutoCapture = useSettings((s) => s.setAutoCapture);
   const idCount = useSession((s) => s.pages.filter((page) => page.type === 'id').length);
-  const { importing, importFiles } = useImport();
+  const { importing, importProgress, importFiles, cancelImport } = useImport();
   const stopCamera = useCallback(() => { cameraGeneration.current++; streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (video.current) video.current.srcObject = null; }, []);
   const startCamera = useCallback(async () => {
     stopCamera(); setCameraState('starting'); setCameraError(''); setTorch(false); setTorchAvailable(false);
@@ -149,7 +149,7 @@ export default function ScanPage() {
             <p>{cameraState === 'paused' ? 'The camera stops when you leave the app. Resume when you are ready.' : cameraError}</p>
             <div className="camera-fallback-actions">
               <Button onClick={() => cameraState === 'paused' || cameraState === 'denied' ? void startCamera() : captureInput.current?.click()}><Camera size={17} />{cameraState === 'paused' ? 'Resume camera' : cameraState === 'denied' ? 'Try camera again' : 'Take a photo'}</Button>
-              <Button variant="secondary" onClick={() => fileInput.current?.click()}><ImagePlus size={17} />Import images</Button>
+              <Button variant="secondary" onClick={() => fileInput.current?.click()}><ImagePlus size={17} />Import images or PDF</Button>
             </div>
           </>}
         </div>}
@@ -157,10 +157,11 @@ export default function ScanPage() {
       </div>
       <div className="camera-bottom">
         <CaptureTray disabled={busy || importing} />
-        <p className="capture-hint" role="status">{cameraState === 'ready' ? hint : 'No uploads. Your photos stay yours.'}</p>
+        <p className="capture-hint" role="status">{importing ? importProgress : cameraState === 'ready' ? hint : 'No uploads. Your photos stay yours.'}</p>
+        {importing && <Button variant="secondary" onClick={cancelImport}>Cancel import</Button>}
         <div className="mode-pills" aria-label="Capture mode">{modes.map((item) => <button key={item} disabled={busy || importing} aria-pressed={mode === item} onClick={() => setMode(item)}>{MODE_LABELS[item]}</button>)}</div>
         <div className="camera-controls">
-          <button className="camera-control gallery-control" aria-label="Import images from device" disabled={importing || busy} onClick={() => fileInput.current?.click()}><ImagePlus size={23} /><span>Import</span></button>
+          <button className="camera-control gallery-control" aria-label="Import images or PDF from device" disabled={importing || busy} onClick={() => fileInput.current?.click()}><ImagePlus size={23} /><span>Import</span></button>
           <button className="shutter" aria-label="Capture document" disabled={busy || importing || !engineReady || cameraState !== 'ready'} onClick={() => void capture()}>
             <svg viewBox="0 0 90 90" aria-hidden="true"><circle className="shutter-ring" cx="45" cy="45" r="41" /><circle className="shutter-progress" cx="45" cy="45" r="41" strokeDasharray="257.6" strokeDashoffset={257.6 * (1 - progress)} /></svg>
             <span>{busy ? <LoaderCircle className="spin" size={25} /> : <ScanLine size={26} />}</span>
@@ -173,7 +174,7 @@ export default function ScanPage() {
         </div>
       </div>
     </main>
-    <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Choose images" />
+    <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Choose images or PDF" />
     <input ref={captureInput} className="sr-only" type="file" accept="image/*" capture="environment" onChange={(e) => { if (e.target.files) void importFiles(e.target.files, mode); e.target.value = ''; }} aria-label="Take a photo with your camera app" />
   </div>;
 }

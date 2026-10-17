@@ -264,10 +264,11 @@ test("synthetic scan edits, security rasterization and every export format", asy
   await page.getByLabel("Paper size").selectOption("a4");
   await page.getByRole("link", { name: "Export document" }).click();
   await expect(page).toHaveURL(/\/export\/?$/);
-  await expect(page.getByAltText("First export sheet with the chosen layout, watermark and redactions")).toBeVisible();
+  await expect(page.getByAltText("Source sheet 1 with the chosen layout, watermark and redactions")).toBeVisible();
   await assertAccessible(page);
   await capture(page, ".qa/playwright/export-desktop.png");
   const pdfDownload = page.waitForEvent("download");
+  if (await page.getByRole("button", { name: /^PDF One document/ }).getAttribute("aria-pressed") === "true") await page.getByRole("button", { name: /^Enhanced scan/ }).click();
   await page.getByRole("button", { name: "Download document", exact: true }).click();
   await assertRasterPdf(await downloadedBytes(await pdfDownload, "multi-page"), 2);
   // Remove the duplicate so each raster format also exercises single-file delivery.
@@ -279,7 +280,8 @@ test("synthetic scan edits, security rasterization and every export format", asy
   for (const format of ["PNG", "JPEG", "WebP"] as const) {
     await page.getByRole("button", { name: new RegExp(`^${format}`) }).click();
     const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Download document", exact: true }).click();
+    if (await page.getByRole("button", { name: /^PDF One document/ }).getAttribute("aria-pressed") === "true") await page.getByRole("button", { name: /^Enhanced scan/ }).click();
+  await page.getByRole("button", { name: "Download document", exact: true }).click();
     const bytes = await downloadedBytes(await download, format.toLowerCase());
     expect(bytes.includes(Buffer.from("Exif\0\0"))).toBe(false);
     const metadata = await sharp(bytes).metadata();
@@ -312,6 +314,7 @@ test("offline scanning and export after the service worker finishes caching", as
   await expect(page.getByAltText("Enhanced document preview")).toBeVisible();
   await page.getByRole("link", { name: "Export document" }).click();
   const download = page.waitForEvent("download");
+  if (await page.getByRole("button", { name: /^PDF One document/ }).getAttribute("aria-pressed") === "true") await page.getByRole("button", { name: /^Enhanced scan/ }).click();
   await page.getByRole("button", { name: "Download document", exact: true }).click();
   const pdf = await PDFDocument.load(await downloadedBytes(await download, "offline"));
   expect(pdf.getPageCount()).toBe(1);
@@ -334,7 +337,7 @@ test("mobile layout, keyboard controls and accessibility on home, editor and set
   await page.getByRole("button", { name: "Close tools" }).click();
   await expect(page.getByAltText("Enhanced document preview")).toBeVisible();
   await page.getByRole("link", { name: "Export", exact: true }).click();
-  await expect(page.getByAltText("First export sheet with the chosen layout, watermark and redactions")).toBeVisible();
+  await expect(page.getByAltText("Source sheet 1 with the chosen layout, watermark and redactions")).toBeVisible();
   await assertAccessible(page);
   await capture(page, ".qa/playwright/export-mobile.png");
   await page.getByRole("link", { name: "Settings", exact: true }).click();
@@ -400,7 +403,7 @@ test("rapid filters, compare, page thumbnails and navigation keep native image U
   // Leave while a new recipe is queued, then return through the real page strip.
   await page.getByRole("button", { name: "Original", exact: true }).click();
   await page.getByRole("link", { name: "Export document", exact: true }).click();
-  const arranged = page.getByAltText("First export sheet with the chosen layout, watermark and redactions", { exact: true });
+  const arranged = page.getByAltText("Source sheet 1 with the chosen layout, watermark and redactions", { exact: true });
   await expect.poll(() => arranged.evaluate((image) => (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
   await page.getByRole("link", { name: "Back to editing", exact: true }).click();
   await first.click();
@@ -510,13 +513,13 @@ test("camera placement outlines fit the video and captured-page review stays rea
     await page.evaluate(() => scrollTo(0, 0));
     await assertInsideViewport(shutter);
     await assertInsideViewport(review);
-    await assertInsideViewport(page.getByRole("button", { name: "Import images from device", exact: true }));
+    await assertInsideViewport(page.getByRole("button", { name: "Import images or PDF from device", exact: true }));
     await expect(page.locator(".install-pill")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `.qa/playwright/camera-batch-${viewport.width}x${viewport.height}.png` });
   }
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import images from device", exact: true }).click();
+  await page.getByRole("button", { name: "Import images or PDF from device", exact: true }).click();
   const gallery = await chooser;
   expect(gallery.isMultiple()).toBe(true);
   await gallery.setFiles([]);
@@ -529,7 +532,7 @@ test("camera placement outlines fit the video and captured-page review stays rea
     };
   });
   await shutter.click();
-  await expect(page.getByRole("button", { name: "Import images from device", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Import images or PDF from device", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Switch camera", exact: true })).toBeDisabled();
   await expect(review).toBeDisabled();
   await expect(page.locator(".capture-tray-thumbnails")).toHaveJSProperty("inert", true);
@@ -616,6 +619,7 @@ test("declared A4 paper restores an angled scan and exports a full sheet with re
   await expect(page.getByRole("button", { name: "Auto-select page orientation", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("slider", { name: "Margin", exact: true })).toHaveValue("0");
   const firstDownload = page.waitForEvent("download");
+  if (await page.getByRole("button", { name: /^PDF One document/ }).getAttribute("aria-pressed") === "true") await page.getByRole("button", { name: /^Enhanced scan/ }).click();
   await page.getByRole("button", { name: "Download document", exact: true }).click();
   const portraitDownload = await firstDownload;
   expect(portraitDownload.suggestedFilename()).toBe(`document-${date}.pdf`);
@@ -633,6 +637,7 @@ test("declared A4 paper restores an angled scan and exports a full sheet with re
   await filename.press("Tab");
   await expect(filename).toHaveValue("Personal copy.jpg");
   const customDownload = page.waitForEvent("download");
+  if (await page.getByRole("button", { name: /^PDF One document/ }).getAttribute("aria-pressed") === "true") await page.getByRole("button", { name: /^Enhanced scan/ }).click();
   await page.getByRole("button", { name: "Download document", exact: true }).click();
   const jpegDownload = await customDownload;
   expect(jpegDownload.suggestedFilename()).toBe("Personal copy.jpg");
@@ -645,6 +650,7 @@ test("declared A4 paper restores an angled scan and exports a full sheet with re
   await expect.poll(() => rendered.evaluate((element) => (element as HTMLImageElement).naturalWidth > (element as HTMLImageElement).naturalHeight)).toBe(true);
   await page.getByRole("link", { name: "Export document", exact: true }).click();
   const landscapeDownloadEvent = page.waitForEvent("download");
+  if (await page.getByRole("button", { name: /^PDF One document/ }).getAttribute("aria-pressed") === "true") await page.getByRole("button", { name: /^Enhanced scan/ }).click();
   await page.getByRole("button", { name: "Download document", exact: true }).click();
   const landscape = await PDFDocument.load(await downloadedBytes(await landscapeDownloadEvent, "auto-landscape-a4"), { updateMetadata: false });
   const landscapeSize = landscape.getPage(0).getSize();
@@ -661,6 +667,7 @@ test("declared A4 paper restores an angled scan and exports a full sheet with re
   await expect(page.getByRole("button", { name: "Portrait", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Auto-select page orientation", exact: true })).toHaveAttribute("aria-pressed", "false");
   const manualDownloadEvent = page.waitForEvent("download");
+  if (await page.getByRole("button", { name: /^PDF One document/ }).getAttribute("aria-pressed") === "true") await page.getByRole("button", { name: /^Enhanced scan/ }).click();
   await page.getByRole("button", { name: "Download document", exact: true }).click();
   const manual = await PDFDocument.load(await downloadedBytes(await manualDownloadEvent, "manual-portrait-a4"), { updateMetadata: false });
   expect(manual.getPage(0).getSize().height).toBeGreaterThan(manual.getPage(0).getSize().width);
