@@ -1,8 +1,8 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { patchOpenCV } from '../scripts/opencv-csp.mjs';
 import type { CV } from '../lib/cv/runtime';
 import type { Quad } from '../lib/types';
@@ -14,13 +14,14 @@ import { validateImage } from '../lib/cv/import-validation';
 import { verifyBytes } from '../lib/cv/protocol';
 
 let cv: CV;
+const cvTestDirectory = mkdtempSync(join(tmpdir(), 'vaultscan-cv-tests-'));
+afterAll(() => rmSync(cvTestDirectory, { recursive: true, force: true }));
 beforeAll(async () => {
   const require = createRequire(import.meta.url);
   const original = readFileSync(require.resolve('@techstark/opencv-js'), 'utf8');
   const patched = patchOpenCV(original);
   expect(patched).not.toMatch(/\bnew\s+Function\s*\(|\beval\s*\(/);
-  const target = fileURLToPath(new URL('../.qa/cv-tests/patched-opencv.cjs', import.meta.url));
-  mkdirSync(dirname(target), { recursive: true });
+  const target = join(cvTestDirectory, 'patched-opencv.cjs');
   writeFileSync(target, patched);
   cv = await (require(target) as CV | Promise<CV>);
 }, 30_000);
