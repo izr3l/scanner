@@ -78,6 +78,7 @@ PNG and JPEG exports include the selected print density without EXIF. WebP has p
 ## Build and asset pipeline
 
 - Next.js App Router uses `output: 'export'`. There are no API routes or server actions. `out/` is the complete deployable site.
+- Mobile navigation uses a persistent Liquid Glass inspired dock with five labeled destinations, a moving selection, safe-area clearance, and accessibility fallbacks. Its styling stays in an external stylesheet under strict CSP; the dedicated camera keeps its own capture controls. [Research, browser limits, and implementation decisions](docs/liquid-glass-mobile-dock-research.md).
 - `scripts/prepare-assets.mjs` copies pinned Syne, Inter, and JetBrains Mono fonts from installed packages and bundles `lib/cv/worker.ts` together with the self-hosted OpenCV engine and its embedded WASM into `public/cv/worker.js`.
 - `scripts/opencv-csp.mjs` replaces the pinned engine's generated embind `createJsInvoker` and emval `__emval_create_invoker` with closure implementations. Preparation checks the expected binding boundaries and rejects remaining `eval` or `new Function` patterns. An OpenCV upgrade requires reviewing the patch and rerunning CV/browser checks.
 - `lib/asset-integrity.ts` records the combined worker's SHA-256 digest. The main thread fetches and verifies the complete artifact before creating a blob worker; its engine and embedded WASM are covered by the same digest. There is no separate runtime OpenCV fetch or `importScripts` step. `public/cv/opencv.js` is only a generated build/test artifact; postbuild removes its copy from `out/`, preventing duplicate download or precaching. No CDN is used at runtime.
@@ -94,10 +95,12 @@ Build once and publish the matching `out/` files and headers together. The CSP h
 | Host | Configuration |
 | --- | --- |
 | Cloudflare Pages / Netlify | Build command `npm run build`, publish directory `out`. The generated `out/_headers` supplies the required headers. |
-| Vercel | `scripts/postbuild.mjs` generates the root `vercel.json` with build command, output directory, and headers for the static site. |
+| Vercel | The committed `vercel.json` selects the build command and disables framework auto-detection. Postbuild emits `.vercel/output/static` and `.vercel/output/config.json` using Vercel's Build Output API, keeping the HTML and its CSP hashes in the same deployment artifact. |
 | Other static host | Publish `out/` and configure the headers recorded in `out/security-headers.json`; a generic file server does not automatically apply them. |
 
 Use HTTPS. Confirm the host preserves CSP, HSTS, Permissions Policy, Referrer Policy, content-type protection, and same-origin resource/opener headers. `npm run preview` provides a local header test; deployment is a separate action and this project setup does not publish anything.
+
+Vercel reads `vercel.json` before the build runs, so postbuild must not put new CSP hashes in that source file. Redeploy the updated source to replace a deployment with stale hashes; simply redeploying the old commit keeps the mismatch. `npm run preview -- --vercel` serves the generated Vercel artifact with its headers, and the browser suite uses that artifact. After redeploying, export any scans in an existing tab before reloading or accepting an app update.
 
 ## Airplane-mode acceptance test
 
@@ -135,7 +138,7 @@ Check signature motions on those devices: crop corners move into the real flatte
 
 Local verification on 2026-10-17 passed TypeScript, ESLint, 131 unit tests, the static production build, and 12 Edge browser flows. The checks cover scanner/camera behavior, PDF import, offline English/French recognition, cancellation, review gating and corrections, searchable extraction, clean text PDF output, redacted text absence, blank metadata, no document uploads or third-party requests, strict CSP, accessibility, and mobile layout. The npm advisory audit reported zero vulnerabilities. Rerun `npm run verify`, `npm run test:browser`, and the advisory audit after changes. Evidence and synthetic downloads stay under `.qa/`.
 
-The current build measured 156,256 gzip bytes (152.6 KiB) of initial modern JavaScript, excluding legacy polyfills, lazy processing/editor/export chunks, CSS, HTML, and fonts. Run `node scripts/measure-shell.mjs` to reproduce it. The full static offline precache, including PDF/OCR engines and models, contains 290 assets totaling approximately 27.9 MiB before HTTP compression; this broader download still needs comparison with the spec's budget.
+The current build measured 157,222 gzip bytes (153.5 KiB) of initial modern JavaScript, excluding legacy polyfills, lazy processing/editor/export chunks, CSS, HTML, and fonts. Run `node scripts/measure-shell.mjs` to reproduce it. The full static offline precache, including PDF/OCR engines and models, contains 291 assets totaling approximately 28.0 MiB before HTTP compression; this broader download still needs comparison with the spec's budget.
 
 A strict-CSP desktop Chrome worker check processed a 12 MP synthetic image at full resolution: Auto rendering took approximately 3.4 seconds, and Document rendering with adjustments, sharpness, rotation, and flip took approximately 8.3 seconds. Those measurements are worker rendering times on a desktop, not capture-to-export timings or proof on the target phones.
 

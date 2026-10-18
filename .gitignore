@@ -1,10 +1,12 @@
 node_modules/
 .next/
 out/
+.vercel/
 .npm-cache/
 *.tsbuildinfo
 test-results/
 .qa/
+disk-audit-local/
 public/cv/opencv.js
 public/cv/worker.js
 public/sw.js

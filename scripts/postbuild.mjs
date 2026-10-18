@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { bundleLocal } from './bundle-local.mjs';
 import { injectManifest } from '@serwist/build';
 import { securityHeaders } from './headers.mjs';
+import { writeVercelOutput } from './vercel-output.mjs';
 async function walk(dir) { const entries = await readdir(dir, { withFileTypes: true }); const children = await Promise.all(entries.map((entry) => entry.isDirectory() ? walk(`${dir}/${entry.name}`) : `${dir}/${entry.name}`)); return children.flat(); }
 const hashes = new Set();
 // The engine is embedded in the verified worker. Avoid shipping it twice.
@@ -25,7 +26,7 @@ for (const file of (await walk('out')).filter((file) => file.endsWith('.html')))
 const headers = securityHeaders([...hashes]);
 await writeFile('out/_headers', `/*\n${Object.entries(headers).map(([key, value]) => `  ${key}: ${value}`).join('\n')}\n`);
 await writeFile('out/security-headers.json', JSON.stringify(headers, null, 2));
-await writeFile('vercel.json', JSON.stringify({ version: 2, buildCommand: 'npm run build', outputDirectory: 'out', framework: null, headers: [{ source: '/(.*)', headers: Object.entries(headers).map(([key, value]) => ({ key, value })) }] }, null, 2));
 await bundleLocal('sw.ts', 'out/sw.js');
 const sw = await injectManifest({ swSrc: 'out/sw.js', swDest: 'out/sw.js', globDirectory: 'out', globPatterns: ['**/*.{html,js,mjs,css,woff2,png,svg,webmanifest,txt,wasm,bcmap,pfb,ttf,gz}'], globIgnores: ['sw.js', 'security-headers.json'], maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, modifyURLPrefix: { '': '/' } });
+await writeVercelOutput(process.cwd(), headers);
 console.log(`Static export secured; ${sw.count} app assets precached (${(sw.size / 1024 / 1024).toFixed(1)} MB). Scans are never cached.`);

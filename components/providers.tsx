@@ -6,6 +6,7 @@ import { toast, subscribeToToastLayer } from '@/lib/toast';
 import { ShieldCheck, ScanLine, Share2, ArrowRight, X, Download } from 'lucide-react';
 import { useSettings } from '@/stores/settings';
 import { useSession } from '@/stores/session';
+import { MobileDock } from './mobile-dock';
 interface InstallPrompt extends Event { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> }
 const ToastLayer = dynamic(() => import('./toast-layer'), { ssr: false });
 const OfflineContext = createContext({ ready: false, installAvailable: false, install: () => {} });
@@ -43,7 +44,7 @@ export function Providers({ children }: { children: ReactNode }) {
   async function install() { if (!prompt) return; await prompt.prompt(); await prompt.userChoice; setPrompt(null); }
   const screens = [ { icon: ShieldCheck, title: 'Your scans stay yours.', description: 'The camera, enhancement and export all run on this device. No uploads, accounts or analytics.' }, { icon: ScanLine, title: 'A temporary workspace.', description: 'Scans live only in memory. Export what you need before closing or reloading the app. There is no library or saved history.' }, { icon: Share2, title: 'You choose what to share.', description: 'Exports strip location and camera metadata. This app cannot protect against a compromised device, screenshots, or a file you choose to share.' } ];
   const ScreenIcon = screens[step].icon;
-  return <OfflineContext.Provider value={{ ready, installAvailable: Boolean(prompt) && pageCount > 0, install }}><a className="skip-link" href="#main-content">Skip to content</a>{children}{showToasts && <ToastLayer theme={theme} />}{hidden && <div className="privacy-cover"><ShieldCheck size={40} /><span>Vaultscan</span></div>}
+  return <OfflineContext.Provider value={{ ready, installAvailable: Boolean(prompt) && pageCount > 0, install }}><a className="skip-link" href="#main-content">Skip to content</a>{children}<MobileDock />{showToasts && <ToastLayer theme={theme} />}{hidden && <div className="privacy-cover"><ShieldCheck size={40} /><span>Vaultscan</span></div>}
     <dialog ref={introDialog} className="intro-sheet" aria-label="Privacy introduction" onClose={() => setIntro(false)}><button className="intro-close" aria-label="Close introduction" onClick={() => setIntro(false)}><X size={20} /></button><div className="intro-icon"><ScreenIcon size={34} strokeWidth={1.4} /></div><p className="eyebrow">PRIVATE BY DESIGN</p><h2>{screens[step].title}</h2><p className="intro-description">{screens[step].description}</p><div className="intro-bottom"><div className="intro-dots" aria-label={`Step ${step + 1} of 3`}>{screens.map((s, i) => <span key={s.title} className={step === i ? 'active' : ''} />)}</div><button type="button" className="button button-primary" onClick={() => step < 2 ? setStep(step + 1) : setIntro(false)}>{step < 2 ? 'Continue' : 'Get started'}<ArrowRight size={16} /></button></div></dialog>
     {Boolean(prompt) && pageCount > 0 && !pathname.startsWith('/scan') && !pathname.startsWith('/edit') && <button className="install-pill" onClick={install}><Download size={16} />Install for offline scanning</button>}
   </OfflineContext.Provider>;

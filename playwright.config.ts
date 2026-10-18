@@ -23,7 +23,7 @@ export default defineConfig({
     launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] },
   },
   webServer: {
-    command: "npm run preview",
+    command: "npm run preview -- --vercel",
     url: baseURL,
     env: { PORT: previewURL.port || (previewURL.protocol === "https:" ? "443" : "80") },
     reuseExistingServer: true,
