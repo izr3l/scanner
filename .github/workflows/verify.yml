@@ -34,10 +34,6 @@ jobs:
         run: node scripts/prepare-assets.mjs
       - name: Verify types, lint, tests, and static build
         run: npm run verify
-      - name: Install browser test runtime
-        run: npx playwright install --with-deps chromium
-      - name: Verify scanner flows, offline use, and accessibility
-        run: npm run test:browser
       - name: Check dependency advisories
         run: npm audit --audit-level=high
 

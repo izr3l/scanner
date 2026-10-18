@@ -39,21 +39,7 @@ npm audit --audit-level=high
 
 `verify` runs TypeScript, ESLint, unit tests, and the static build. The audit contacts the npm advisory service for dependency information; it does not run in the app or send scans. Tests cover real OpenCV detection and enhancement, crop geometry, asset integrity, import validation, physical export layout, redaction bounds, PDF metadata, and print resolution. CI adds dependency review for pull requests. Review CI results in the repository; configuring a workflow does not demonstrate that a hosted CI run has passed.
 
-Run the production browser checks after building:
-
-```sh
-npm run build
-npm run test:browser
-```
-
-The Playwright harness starts the strict-CSP preview automatically and uses an existing Microsoft Edge installation on Windows. On Linux or CI, first install its Chromium runtime:
-
-```sh
-npx playwright install --with-deps chromium
-npm run test:browser
-```
-
-Browser checks exercise synthetic imports, editing and keyboard controls, redaction rasterization, all export formats, offline reload/export, and accessibility. A synthetic live camera checks manual capture, Book/Batch stacking, guide proportions and video bounds, compact-screen review controls, ID front/back prompts, track shutdown on exit, and a simulated background visibility event; headless Chromium does not reproduce an OS app switch. Set `PLAYWRIGHT_BASE_URL` to a different localhost port to test separately from an active development session. Traces, screenshots, synthetic fixtures, and downloaded test exports stay under the ignored `.qa/` directory. The separate `node tests/cv-worker.mjs` check uses an installed Chrome on Windows to verify a 12 MP image through the strict-CSP worker; it is optional and runs after asset preparation. Neither harness establishes real iPhone or Android compatibility.
+GitHub CI runs types, lint, unit tests, the static build, and the dependency advisory audit. Browser automation was removed on 2026-10-18. Check browser behavior manually with `npm run preview` after building, or use `npm run preview -- --vercel` to inspect the generated Vercel artifact. Follow the airplane-mode procedure and device matrix below for navigation, camera, editing, export, accessibility, and offline verification.
 
 ## Using the scanner
 
@@ -80,7 +66,7 @@ PNG and JPEG exports include the selected print density without EXIF. WebP has p
 - Next.js App Router uses `output: 'export'`. There are no API routes or server actions. `out/` is the complete deployable site.
 - Mobile navigation uses a persistent Liquid Glass inspired dock with five labeled destinations, a moving selection, safe-area clearance, and accessibility fallbacks. Its styling stays in an external stylesheet under strict CSP; the dedicated camera keeps its own capture controls. [Research, browser limits, and implementation decisions](docs/liquid-glass-mobile-dock-research.md).
 - `scripts/prepare-assets.mjs` copies pinned Syne, Inter, and JetBrains Mono fonts from installed packages and bundles `lib/cv/worker.ts` together with the self-hosted OpenCV engine and its embedded WASM into `public/cv/worker.js`.
-- `scripts/opencv-csp.mjs` replaces the pinned engine's generated embind `createJsInvoker` and emval `__emval_create_invoker` with closure implementations. Preparation checks the expected binding boundaries and rejects remaining `eval` or `new Function` patterns. An OpenCV upgrade requires reviewing the patch and rerunning CV/browser checks.
+- `scripts/opencv-csp.mjs` replaces the pinned engine's generated embind `createJsInvoker` and emval `__emval_create_invoker` with closure implementations. Preparation checks the expected binding boundaries and rejects remaining `eval` or `new Function` patterns. An OpenCV upgrade requires reviewing the patch, rerunning CV unit tests, and manually checking processing under strict CSP.
 - `lib/asset-integrity.ts` records the combined worker's SHA-256 digest. The main thread fetches and verifies the complete artifact before creating a blob worker; its engine and embedded WASM are covered by the same digest. There is no separate runtime OpenCV fetch or `importScripts` step. `public/cv/opencv.js` is only a generated build/test artifact; postbuild removes its copy from `out/`, preventing duplicate download or precaching. No CDN is used at runtime.
 - PDF.js 6 renders imported PDFs to new PNG pages using a same-origin module worker, local CMaps, fonts, and WASM. Tesseract's LSTM core and embedded WASM are bundled with its worker; worker and English/French model bytes are verified before use. Models and the PDF output font come from pinned installed packages and are included in the static precache. Tesseract's IndexedDB cache is disabled.
 - Vaul and Sonner styles are extracted into `app/vendor.css`, and narrow build loaders remove their runtime style-block injection. Extraction fixes the pinned Vaul 1.1.2 stray colon in its handle hit-area rule. A separate adapter replaces `react-remove-scroll-bar` style injection with external CSS and a measured numeric scrollbar-width CSS variable. These adapters preserve `style-src 'self'` and fail if their expected dependency source changes.
@@ -100,7 +86,7 @@ Build once and publish the matching `out/` files and headers together. The CSP h
 
 Use HTTPS. Confirm the host preserves CSP, HSTS, Permissions Policy, Referrer Policy, content-type protection, and same-origin resource/opener headers. `npm run preview` provides a local header test; deployment is a separate action and this project setup does not publish anything.
 
-Vercel reads `vercel.json` before the build runs, so postbuild must not put new CSP hashes in that source file. Redeploy the updated source to replace a deployment with stale hashes; simply redeploying the old commit keeps the mismatch. `npm run preview -- --vercel` serves the generated Vercel artifact with its headers, and the browser suite uses that artifact. After redeploying, export any scans in an existing tab before reloading or accepting an app update.
+Vercel reads `vercel.json` before the build runs, so postbuild must not put new CSP hashes in that source file. Redeploy the updated source to replace a deployment with stale hashes; simply redeploying the old commit keeps the mismatch. `npm run preview -- --vercel` serves the generated Vercel artifact with its headers for manual browser checks. After redeploying, export any scans in an existing tab before reloading or accepting an app update.
 
 ## Airplane-mode acceptance test
 
@@ -136,11 +122,11 @@ Check signature motions on those devices: crop corners move into the real flatte
 
 ## Verification status
 
-Local verification on 2026-10-17 passed TypeScript, ESLint, 131 unit tests, the static production build, and 12 Edge browser flows. The checks cover scanner/camera behavior, PDF import, offline English/French recognition, cancellation, review gating and corrections, searchable extraction, clean text PDF output, redacted text absence, blank metadata, no document uploads or third-party requests, strict CSP, accessibility, and mobile layout. The npm advisory audit reported zero vulnerabilities. Rerun `npm run verify`, `npm run test:browser`, and the advisory audit after changes. Evidence and synthetic downloads stay under `.qa/`.
+Historical local verification on 2026-10-17 passed TypeScript, ESLint, 131 unit tests, the static production build, and 12 Edge browser flows. Those browser checks covered scanner/camera behavior, PDF import, offline English/French recognition, cancellation, review gating and corrections, searchable extraction, clean text PDF output, redacted text absence, blank metadata, no document uploads or third-party requests, strict CSP, accessibility, and mobile layout. The npm advisory audit reported zero vulnerabilities. Browser automation was removed on 2026-10-18. After changes, rerun `npm run verify` and the advisory audit, then perform the manual browser and device checks above.
 
 The current build measured 157,222 gzip bytes (153.5 KiB) of initial modern JavaScript, excluding legacy polyfills, lazy processing/editor/export chunks, CSS, HTML, and fonts. Run `node scripts/measure-shell.mjs` to reproduce it. The full static offline precache, including PDF/OCR engines and models, contains 291 assets totaling approximately 28.0 MiB before HTTP compression; this broader download still needs comparison with the spec's budget.
 
-A strict-CSP desktop Chrome worker check processed a 12 MP synthetic image at full resolution: Auto rendering took approximately 3.4 seconds, and Document rendering with adjustments, sharpness, rotation, and flip took approximately 8.3 seconds. Those measurements are worker rendering times on a desktop, not capture-to-export timings or proof on the target phones.
+A historical strict-CSP desktop Chrome worker check processed a 12 MP synthetic image at full resolution: Auto rendering took approximately 3.4 seconds, and Document rendering with adjustments, sharpness, rotation, and flip took approximately 8.3 seconds. Those measurements are worker rendering times on a desktop, not capture-to-export timings or proof on the target phones.
 
 Real iPhone and mid-range Android checks, physical print measurement, complete capture-to-export timing, and full app-shell/TTI/live-detection budgets still require measured evidence. Strict-CSP operation and airplane-mode behavior must also be checked on the final deployed host.
 

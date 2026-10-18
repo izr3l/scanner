@@ -12,6 +12,5 @@ export default defineConfig([
     'no-restricted-syntax': ['error', { selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']", message: 'HTML injection is prohibited.' }]
   } },
   { files: ['lib/export/index.ts'], rules: { 'no-control-regex': 'off' } },
-  { files: ['tests/**/*.mjs'], languageOptions: { globals: Object.fromEntries(['document','window','navigator','fetch','btoa','crypto','URL','Blob','trustedTypes','Worker','setTimeout','clearTimeout','location','performance','createImageBitmap','process','console'].map((name) => [name, 'readonly'])) } },
-  globalIgnores(['.next/**', 'out/**', 'public/**', '.qa/**'])
+  globalIgnores(['.next/**', 'out/**', 'public/**'])
 ]);
