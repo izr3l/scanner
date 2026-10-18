@@ -238,16 +238,21 @@ test('dock honors reduced motion, contrast, forced colors and reduced transparen
       && (style.animationName === 'none' || style.animationDuration.split(',').every((duration) => parseFloat(duration) === 0));
   })).toBe(true);
 
-  await page.emulateMedia({ contrast: 'more' });
-  await assertSolidMaterial(dock);
-  await page.emulateMedia({ contrast: 'no-preference', forcedColors: 'active' });
-  await assertSolidMaterial(dock);
-  await assertSelection(dock, 'settings');
-
-  await page.emulateMedia({ forcedColors: 'none' });
-  // Playwright has no reduced-transparency option; Chromium exposes the CSS preference via CDP.
+  // Chromium's Playwright contrast emulation is inconsistent between browser
+  // channels. Set the media feature through CDP so CI and local Chromium runs
+  // exercise the same fallback.
   const session = await context.newCDPSession(page);
   try {
+    await session.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-contrast', value: 'more' }] });
+    expect(await page.evaluate(() => matchMedia('(prefers-contrast: more)').matches)).toBe(true);
+    await assertSolidMaterial(dock);
+    await page.emulateMedia({ contrast: 'no-preference', forcedColors: 'active' });
+    await session.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-contrast', value: 'no-preference' }] });
+    await assertSolidMaterial(dock);
+    await assertSelection(dock, 'settings');
+
+    await page.emulateMedia({ forcedColors: 'none' });
+    // Playwright has no reduced-transparency option; Chromium exposes the CSS preference via CDP.
     await session.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
     expect(await page.evaluate(() => matchMedia('(prefers-reduced-transparency: reduce)').matches)).toBe(true);
     await assertSolidMaterial(dock);
