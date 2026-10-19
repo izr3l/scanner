@@ -4,13 +4,15 @@ import { resolve, extname, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 const vercelOutput = process.argv.includes('--vercel');
 const root = resolve(vercelOutput ? '.vercel/output/static' : 'out');
-const deployment = vercelOutput ? JSON.parse(await readFile(resolve('.vercel/output/config.json'), 'utf8')) : null;
-const headers = deployment ? {} : JSON.parse(await readFile(resolve(root, 'security-headers.json'), 'utf8'));
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.txt': 'text/plain', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm' };
 const port = Number(process.env.PORT || 3000);
 http.createServer(async (req, res) => {
   try {
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); res.end(); return; }
+    // A preview can stay running across builds. Read the current policy/routes
+    // with each response so new HTML never uses CSP hashes held from startup.
+    const deployment = vercelOutput ? JSON.parse(await readFile(resolve('.vercel/output/config.json'), 'utf8')) : null;
+    const headers = deployment ? {} : JSON.parse(await readFile(resolve(root, 'security-headers.json'), 'utf8'));
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
     let file = resolve(root, `.${pathname}`);
     let status = 200;

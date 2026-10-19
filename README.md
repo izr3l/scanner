@@ -6,6 +6,8 @@ A document-scanning PWA. Capture a photo or import images and scanned PDFs, flat
 
 There is no saved library, IndexedDB, scan encryption at rest, passcode, lock/unlock, or Vault. Reloading or closing the app discards the session. Export files you want to keep before leaving. Downloads, clipboard contents, and files shared with another app are outside the temporary workspace.
 
+The privacy introduction appears on first use. Closing or completing it saves one non-sensitive acknowledgement in this browser's local storage so it stays dismissed on later visits. Scans, recognized text, and session settings are not stored. If browser storage is blocked or cleared, the introduction may appear again.
+
 Only public app assets, including the PDF renderer and OCR language models, are cached for offline use. The service worker never caches scans or recognized text; OCR does not use an IndexedDB model cache. Passport MRZ reading and password-protected PDF export remain deferred. Password-protected PDF imports are rejected.
 
 ## Run locally
