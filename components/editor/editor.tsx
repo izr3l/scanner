@@ -42,7 +42,6 @@ export function Editor() {
   const [drawing, setDrawing] = useState(false);
   const [flattening, setFlattening] = useState<ScanPage | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeSnapPoint, setActiveSnapPoint] = useState<number | string | null>(0.55);
   const [renderSize, setRenderSize] = useState({ width: 1, height: 1 });
   const detectionRequest = useRef(0);
   const currentPageId = useRef(page?.id);
@@ -102,7 +101,24 @@ export function Editor() {
         {previewError && tab !== "crop" ? <p className="editor-error" role="alert">{previewError}</p> : null}
         <div className="editor-preview-footer"><span><ShieldCheck size={14} />Only on your device</span>{tab === "enhance" ? <Button variant="ghost" size="sm" disabled={!before.blob || before.busy} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setFlattening(null); setComparing(true); }} onPointerUp={() => setComparing(false)} onPointerCancel={() => setComparing(false)} onLostPointerCapture={() => setComparing(false)} onKeyDown={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); setFlattening(null); setComparing(true); } }} onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") setComparing(false); }} onBlur={() => setComparing(false)} aria-pressed={comparing}><Eye size={15} />{comparing ? "Original" : "Hold to compare"}</Button> : <span>{tab === "crop" ? "Drag corners to adjust" : tab === "arrange" ? "First sheet · exact export layout" : drawing ? "Drag to hide sensitive details" : "Privacy controls"}</span>}</div>
       </section><PageStrip /></div><aside className="editor-tools-desktop">{tools}</aside></div>
-      <div className="editor-mobile-actions"><Drawer.Root open={drawerOpen} onOpenChange={setDrawerOpen} snapPoints={[0.24, 0.55, 1]} activeSnapPoint={activeSnapPoint} setActiveSnapPoint={setActiveSnapPoint}><Drawer.Trigger asChild><Button variant="secondary"><SlidersHorizontal size={18} />{TABS.find((item) => item.id === tab)?.label}<ChevronDown size={14} /></Button></Drawer.Trigger><Drawer.Portal><Drawer.Overlay className="editor-sheet-overlay" /><Drawer.Content className="editor-sheet"><div className="editor-sheet-handle" /><div className="editor-sheet-title"><Drawer.Title>{TABS.find((item) => item.id === tab)?.label} your scan</Drawer.Title><Drawer.Close asChild><Button variant="ghost" size="icon" aria-label="Close tools"><X size={20} /></Button></Drawer.Close></div><Drawer.Description className="editor-sr-only">Adjust the current page using the controls below.</Drawer.Description><div className="editor-sheet-body" style={{ maxHeight: `calc(${typeof activeSnapPoint === "number" ? activeSnapPoint * 100 : 90}dvh - 100px)` }}>{tools}</div></Drawer.Content></Drawer.Portal></Drawer.Root><Button asChild><Link href="/export">Export<ArrowRight size={17} /></Link></Button></div>
+      <div className="editor-mobile-actions">
+        {/* Keep control gestures separate from Vaul's swipe-to-dismiss handling. */}
+        <Drawer.Root open={drawerOpen} onOpenChange={setDrawerOpen} handleOnly autoFocus>
+          <Drawer.Trigger asChild><Button variant="secondary"><SlidersHorizontal size={18} />{TABS.find((item) => item.id === tab)?.label}<ChevronDown size={14} /></Button></Drawer.Trigger>
+          <Drawer.Portal>
+            <Drawer.Overlay className="editor-sheet-overlay" />
+            <Drawer.Content className="editor-sheet" onPointerDownOutside={(event) => event.preventDefault()}>
+              <div className="editor-sheet-title">
+                <Drawer.Title>{TABS.find((item) => item.id === tab)?.label} your scan</Drawer.Title>
+                <Drawer.Close asChild><Button variant="ghost" size="icon" aria-label="Close tools"><X size={20} /></Button></Drawer.Close>
+              </div>
+              <Drawer.Description className="editor-sr-only">Adjust the current page using the controls below. Close tools to return to the document preview.</Drawer.Description>
+              <div className="editor-sheet-body">{tools}</div>
+            </Drawer.Content>
+          </Drawer.Portal>
+        </Drawer.Root>
+        <Button asChild><Link href="/export">Export<ArrowRight size={17} /></Link></Button>
+      </div>
     </>}
   </AppShell>;
 }

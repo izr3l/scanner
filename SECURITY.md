@@ -15,7 +15,7 @@ A fully compromised device, hostile browser extension with sufficient access, OS
 
 ## Data lifetime
 
-- The session and settings stores have no persistence middleware. There is no IndexedDB, localStorage, saved draft, encrypted scan database, or browser storage-persistence request. Tesseract's IndexedDB cache is disabled; language models are public static assets in the service worker's build cache.
+- The session and settings stores have no persistence middleware. Local storage contains only the non-sensitive `vaultscan.intro-dismissed.v1` acknowledgement, used to avoid repeating the first-use introduction. No scan, recognized text, or session setting is persisted. There is no IndexedDB, saved draft, encrypted scan database, or browser storage-persistence request. Tesseract's IndexedDB cache is disabled; language models are public static assets in the service worker's build cache.
 - Original imported files may contain private metadata in memory. Exporting uses a fresh canvas raster rather than returning or embedding that original blob.
 - The service worker precaches only the site's static build manifest, including PDF rendering assets and OCR workers/models. It has no runtime caching routes; scans, recognized/corrected text, and export blobs never enter Cache Storage.
 - Processing closes ImageBitmaps, deletes OpenCV matrices, and zeros temporary canvas dimensions. Blob URLs are revoked once their consumer has used them; downloads keep a URL briefly alive so asynchronous browser download dispatch can consume it.
