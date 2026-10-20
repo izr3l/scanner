@@ -8,6 +8,8 @@ There is no saved library, IndexedDB, scan encryption at rest, passcode, lock/un
 
 The privacy introduction appears on first use. Closing or completing it saves one non-sensitive acknowledgement in this browser's local storage so it stays dismissed on later visits. Scans, recognized text, and session settings are not stored. If browser storage is blocked or cleared, the introduction may appear again.
 
+Installed iPhone apps use the default system status bar instead of the deprecated translucent mode that can obscure the header on iOS 27. After deploying, accept the app update and relaunch. If the old status-bar layout persists, export any scans, remove the existing Home Screen app, open the updated site in Safari, and add it to the Home Screen again: iOS can retain configuration from installation. Check the header and all three introduction steps in portrait and landscape. The introduction should have rounded corners and visible space below it, and scroll internally when the screen is short. Desktop browser checks do not verify iOS system rendering.
+
 Only public app assets, including the PDF renderer and OCR language models, are cached for offline use. The service worker never caches scans or recognized text; OCR does not use an IndexedDB model cache. Passport MRZ reading and password-protected PDF export remain deferred. Password-protected PDF imports are rejected.
 
 ## Run locally
